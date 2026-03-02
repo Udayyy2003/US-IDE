@@ -13,6 +13,14 @@ import requests
 from pathlib import Path
 from functools import wraps
 
+# Monkey patch for production (Linux/Render)
+if os.name != 'nt':
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except ImportError:
+        pass
+
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -26,8 +34,9 @@ load_dotenv(override=True)
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "us-ide-secret-key-change-in-production")
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+# Initialize SocketIO (Use threading for Windows, eventlet/gevent for Linux)
+async_mode = 'threading' if os.name == 'nt' else None
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=async_mode)
 
 # CORS configuration for frontend
 CORS(app, resources={
