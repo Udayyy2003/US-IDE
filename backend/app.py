@@ -24,8 +24,6 @@ import requests
 from pathlib import Path
 from functools import wraps
 
-print(f"[US-IDE] Starting backend on {os.name} with Python {sys.version}")
-
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -34,7 +32,11 @@ import docker
 import threading
 from groq import Groq
 
+# Load environment variables
 load_dotenv(override=True)
+
+print(f"[US-IDE] Starting backend on {os.name} with Python {sys.version}")
+print(f"[US-IDE] Environment: {os.getenv('FLASK_ENV', 'production')}")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "us-ide-secret-key-change-in-production")
