@@ -4,6 +4,17 @@ Production-grade AI-powered IDE backend
 """
 
 import os
+import sys
+
+# Monkey patch for production (Linux/Render) - MUST BE FIRST
+if os.name != 'nt':
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+        print("[US-IDE] Eventlet monkey patch applied")
+    except ImportError:
+        print("[US-IDE] Eventlet not found, skipping monkey patch")
+
 import json
 import re
 import uuid
@@ -13,13 +24,7 @@ import requests
 from pathlib import Path
 from functools import wraps
 
-# Monkey patch for production (Linux/Render)
-if os.name != 'nt':
-    try:
-        import eventlet
-        eventlet.monkey_patch()
-    except ImportError:
-        pass
+print(f"[US-IDE] Starting backend on {os.name} with Python {sys.version}")
 
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
@@ -55,8 +60,12 @@ CORS(app, resources={
 
 # Initialize Groq client
 groq_api_key = os.getenv("GROQ_API_KEY", "")
-print(f"[US-IDE] Groq API Key loaded: {groq_api_key[:10]}...{groq_api_key[-5:] if groq_api_key else ''}")
-groq_client = Groq(api_key=groq_api_key)
+if groq_api_key:
+    print(f"[US-IDE] Groq API Key loaded: {groq_api_key[:10]}...")
+    groq_client = Groq(api_key=groq_api_key)
+else:
+    print("[US-IDE] WARNING: GROQ_API_KEY not found")
+    groq_client = None
 
 # Initialize Docker client
 try:
@@ -551,6 +560,9 @@ You help users with:
 
 When providing code, always wrap it in proper markdown code blocks with the language specified.
 Be concise, technical, and helpful. Focus on practical solutions."""
+
+    if not groq_client:
+        return jsonify({"error": "AI Assistant not configured (missing API key)"}), 503
 
     # Build messages
     messages = [{"role": "system", "content": system_prompt}]
