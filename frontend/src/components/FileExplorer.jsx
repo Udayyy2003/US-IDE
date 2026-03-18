@@ -81,7 +81,10 @@ function TreeItem({
   const [loading, setLoading] = useState(false)
   const [ctx, setCtx] = useState(null)
 
+  const isElectron = !!window.api
+
   const loadChildren = async () => {
+    if (!isElectron) return
     setLoading(true)
     const res = await window.api.readDir(item.path)
     if (res.success) {

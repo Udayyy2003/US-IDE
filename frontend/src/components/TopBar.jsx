@@ -24,6 +24,7 @@ export default function TopBar({
     openFiles, currentFile,
   } = useIDE()
 
+  const isElectron = !!window.api
   const lang = LANG_LABELS[currentLanguage] || { icon: '📄', label: currentLanguage || '' }
   const curTab = openFiles.find(f => f.path === currentFile)
   const unsaved = curTab?.unsaved
@@ -52,9 +53,17 @@ export default function TopBar({
 
         {/* Project / file name */}
         <button
-          onClick={onOpenFolder}
-          title="Open Folder (Ctrl+Shift+O)"
-          style={{ ...btnStyle, gap: 8, maxWidth: 220, padding: '6px 12px', borderRadius: 8 }}
+          onClick={isElectron ? onOpenFolder : undefined}
+          title={isElectron ? "Open Folder (Ctrl+Shift+O)" : "Open Folder is only available in desktop version"}
+          style={{ 
+            ...btnStyle, 
+            gap: 8, 
+            maxWidth: 220, 
+            padding: '6px 12px', 
+            borderRadius: 8,
+            cursor: isElectron ? 'pointer' : 'not-allowed',
+            opacity: isElectron ? 1 : 0.6
+          }}
         >
           <span style={{ fontSize: 14 }}>{lang.icon}</span>
           <span style={{ fontSize: 13, color: '#e8e8f0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -81,31 +90,44 @@ export default function TopBar({
         background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: 12,
         border: '1px solid rgba(255,255,255,0.05)'
       }}>
-        <Btn onClick={onNewFile} title="New File (Ctrl+N)" icon="📄" label="New" />
-        <Btn onClick={onOpenFile} title="Open File (Ctrl+O)" icon="📂" label="Open" />
+        <Btn 
+          onClick={isElectron ? onNewFile : undefined} 
+          title={isElectron ? "New File (Ctrl+N)" : "New File is only available in desktop version"} 
+          icon="📄" 
+          label="New" 
+          disabled={!isElectron}
+        />
+        <Btn 
+          onClick={isElectron ? onOpenFile : undefined} 
+          title={isElectron ? "Open File (Ctrl+O)" : "Open File is only available in desktop version"} 
+          icon="📂" 
+          label="Open" 
+          disabled={!isElectron}
+        />
         <Btn
-          onClick={onSave}
-          title="Save (Ctrl+S)"
+          onClick={isElectron ? onSave : undefined}
+          title={isElectron ? "Save (Ctrl+S)" : "Save is only available in desktop version"}
           icon={isSaving ? '…' : '💾'}
           label={isSaving ? 'Saving' : 'Save'}
-          disabled={!currentFile}
+          disabled={!currentFile || !isElectron}
         />
         <div style={{ width: 1, height: 20, background: '#1f1f32', margin: '0 4px' }} />
         <Btn
-          onClick={onRun}
-          title="Run (Ctrl+Enter)"
+          onClick={isElectron ? onRun : undefined}
+          title={isElectron ? "Run (Ctrl+Enter)" : "Code execution is only available in desktop version"}
           icon={isRunning ? '⏹' : '▶'}
           label={isRunning ? 'Running' : 'Run'}
           primary
-          disabled={!currentFile || isRunning}
+          disabled={!currentFile || isRunning || !isElectron}
         />
         <div style={{ width: 1, height: 20, background: '#1f1f32', margin: '0 4px' }} />
         <Btn
           onClick={() => setAutoSave(v => !v)}
-          title={autoSave ? 'Disable Auto Save' : 'Enable Auto Save'}
+          title={isElectron ? (autoSave ? 'Disable Auto Save' : 'Enable Auto Save') : "Auto Save is only available in desktop version"}
           icon="⚡"
           label="Auto"
           active={autoSave}
+          disabled={!isElectron}
         />
         <Btn onClick={onToggleTerminal} title="Toggle Terminal (Ctrl+`)" icon="⬛" label={terminalVisible ? 'Hide Term' : 'Terminal'} />
         <Btn onClick={onCommandPalette} title="Command Palette (Ctrl+Shift+P)" icon="⌨️" label="Palette" />

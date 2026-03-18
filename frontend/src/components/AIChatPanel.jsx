@@ -253,7 +253,7 @@ export default function AIChatPanel() {
       const isNetworkError = err.code === 'ERR_NETWORK' || !err.response
       const msg = err.response?.data?.error
         || (isNetworkError
-            ? `⚠️ AI service is currently unavailable. Please check your internet connection or try again later.`
+            ? `⚠️ AI service is currently unavailable. The backend may be sleeping or starting up. Please try again in a moment.`
             : 'Could not reach AI. Check if the backend is running and the Groq API key is set.')
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
