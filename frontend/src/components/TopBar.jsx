@@ -1,142 +1,162 @@
 import React from 'react'
-import { useAuth } from '../contexts/AuthContext'
 import { useIDE } from '../contexts/IDEContext'
 
 const LANG_LABELS = {
   python: { icon: '🐍', label: 'Python' },
-  c:      { icon: '⚙️', label: 'C' },
-  cpp:    { icon: '⚡', label: 'C++' },
-  java:   { icon: '☕', label: 'Java' },
+  c: { icon: '⚙️', label: 'C' },
+  cpp: { icon: '⚡', label: 'C++' },
+  java: { icon: '☕', label: 'Java' },
+  javascript: { icon: '🟡', label: 'JS' },
+  typescript: { icon: '🔷', label: 'TS' },
+  html: { icon: '🌐', label: 'HTML' },
+  css: { icon: '🎨', label: 'CSS' },
 }
 
-export default function TopBar({ onSave, onRun, onNewProject, onOpenProject }) {
-  const { user, logout } = useAuth()
-  const { currentProject, currentLanguage, isRunning, isSaving } = useIDE()
-  const langInfo = LANG_LABELS[currentLanguage] || { icon: '📄', label: currentLanguage }
+export default function TopBar({
+  onSave, onRun, onOpenFile, onOpenFolder,
+  onNewFile, onNewProject, onToggleTerminal, onCommandPalette,
+}) {
+  const {
+    currentProject, currentLanguage,
+    isRunning, isSaving,
+    autoSave, setAutoSave,
+    terminalVisible,
+    openFiles, currentFile,
+  } = useIDE()
+
+  const lang = LANG_LABELS[currentLanguage] || { icon: '📄', label: currentLanguage || '' }
+  const curTab = openFiles.find(f => f.path === currentFile)
+  const unsaved = curTab?.unsaved
 
   return (
-    <div className="flex items-center justify-between px-4 h-12 border-b border-border-subtle shrink-0" style={{ background: '#0a0a0f' }}>
-      
-      {/* Left: Logo + Project */}
-      <div className="flex items-center gap-4">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c6df5, #00d4ff)' }}>
-            <span className="text-white font-bold text-xs">US</span>
-          </div>
-          <span className="text-text-primary font-semibold text-sm tracking-tight hidden sm:block">US-IDE</span>
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 16px', height: 56, background: '#0a0a0f',
+      borderBottom: '1px solid #1a1a28', flexShrink: 0,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+    }}>
+      {/* ─ Left: Logo + Project ─ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ 
+          width: 32, height: 32, borderRadius: 10, 
+          background: 'linear-gradient(135deg, #7c6df5, #00d4ff)', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+          flexShrink: 0,
+          boxShadow: '0 0 15px rgba(124,109,245,0.4)'
+        }}>
+          <span style={{ color: '#fff', fontWeight: 900, fontSize: 13, fontFamily: 'monospace' }}>US</span>
         </div>
 
-        <div className="w-px h-5 bg-border-subtle" />
+        <div style={{ width: 1, height: 24, background: '#1f1f32' }} />
 
-        {/* Project selector */}
+        {/* Project / file name */}
         <button
-          onClick={onOpenProject}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors hover:bg-bg-hover"
+          onClick={onOpenFolder}
+          title="Open Folder (Ctrl+Shift+O)"
+          style={{ ...btnStyle, gap: 8, maxWidth: 220, padding: '6px 12px', borderRadius: 8 }}
         >
-          <span className="text-xs">{langInfo.icon}</span>
-          <span className="text-text-primary font-medium truncate max-w-32">{currentProject?.name || 'Open Project'}</span>
-          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="text-text-muted">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
+          <span style={{ fontSize: 14 }}>{lang.icon}</span>
+          <span style={{ fontSize: 13, color: '#e8e8f0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {currentProject?.name || 'Open Folder'}
+          </span>
+          {unsaved && <span style={{ color: '#7c6df5', fontSize: 18, marginLeft: 4 }}>●</span>}
         </button>
 
-        {/* Language badge */}
         {currentProject && (
-          <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-mono" style={{ background: 'rgba(124, 109, 245, 0.1)', color: '#9d8fff' }}>
-            {langInfo.label}
-          </div>
+          <span style={{ 
+            fontSize: 10, fontWeight: 700,
+            background: 'rgba(124,109,245,0.1)', color: '#9d8fff', 
+            padding: '3px 10px', borderRadius: 6, 
+            fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em'
+          }}>
+            {lang.label}
+          </span>
         )}
       </div>
 
-      {/* Center: Actions */}
-      <div className="flex items-center gap-2">
-        <button
+      {/* ─ Center: Action buttons ─ */}
+      <div style={{ 
+        display: 'flex', alignItems: 'center', gap: 6, 
+        background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: 12,
+        border: '1px solid rgba(255,255,255,0.05)'
+      }}>
+        <Btn onClick={onNewFile} title="New File (Ctrl+N)" icon="📄" label="New" />
+        <Btn onClick={onOpenFile} title="Open File (Ctrl+O)" icon="📂" label="Open" />
+        <Btn
           onClick={onSave}
-          disabled={isSaving || !currentProject}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
-          style={{ background: 'rgba(124, 109, 245, 0.1)', border: '1px solid rgba(124, 109, 245, 0.2)', color: '#9d8fff' }}
-        >
-          {isSaving ? (
-            <><div className="spinner" style={{ width: 12, height: 12 }} /> Saving</>
-          ) : (
-            <>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M13 11v2H3v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-              Save
-            </>
-          )}
-        </button>
-
-        <button
+          title="Save (Ctrl+S)"
+          icon={isSaving ? '…' : '💾'}
+          label={isSaving ? 'Saving' : 'Save'}
+          disabled={!currentFile}
+        />
+        <div style={{ width: 1, height: 20, background: '#1f1f32', margin: '0 4px' }} />
+        <Btn
           onClick={onRun}
-          disabled={isRunning || !currentProject}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
-          style={{ background: isRunning ? '#2a2a3d' : 'linear-gradient(135deg, #00ff94, #00d4ff)', color: isRunning ? '#555570' : '#0a0a0f' }}
-        >
-          {isRunning ? (
-            <><div className="spinner" style={{ width: 12, height: 12, borderTopColor: '#7c6df5' }} /> Running</>
-          ) : (
-            <>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M5 3l9 5-9 5V3z" fill="currentColor"/>
-              </svg>
-              Run
-            </>
-          )}
-        </button>
-
-        <button
-          onClick={onNewProject}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-          style={{ border: '1px solid #2a2a3d', color: '#8888a8' }}
-          title="New Project"
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          New
-        </button>
+          title="Run (Ctrl+Enter)"
+          icon={isRunning ? '⏹' : '▶'}
+          label={isRunning ? 'Running' : 'Run'}
+          primary
+          disabled={!currentFile || isRunning}
+        />
+        <div style={{ width: 1, height: 20, background: '#1f1f32', margin: '0 4px' }} />
+        <Btn
+          onClick={() => setAutoSave(v => !v)}
+          title={autoSave ? 'Disable Auto Save' : 'Enable Auto Save'}
+          icon="⚡"
+          label="Auto"
+          active={autoSave}
+        />
+        <Btn onClick={onToggleTerminal} title="Toggle Terminal (Ctrl+`)" icon="⬛" label={terminalVisible ? 'Hide Term' : 'Terminal'} />
+        <Btn onClick={onCommandPalette} title="Command Palette (Ctrl+Shift+P)" icon="⌨️" label="Palette" />
       </div>
 
-      {/* Right: User */}
-      <div className="flex items-center gap-3">
-        <div className="hidden sm:flex flex-col items-end">
-          <span className="text-text-primary text-xs font-medium truncate max-w-24">{user?.name}</span>
-          <span className="text-text-muted text-xs truncate max-w-24">{user?.email}</span>
+      {/* ─ Right: Status ─ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, fontWeight: 600, fontFamily: 'monospace', color: '#444466' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e888', boxShadow: '0 0 8px #00e888' }} />
+          <span>STABLE</span>
         </div>
-        <div className="relative group">
-          {user?.picture ? (
-            <img
-              src={user.picture}
-              alt={user.name}
-              className="w-8 h-8 rounded-full cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold cursor-pointer" style={{ background: 'rgba(124, 109, 245, 0.2)', color: '#9d8fff' }}>
-              {user?.name?.[0]?.toUpperCase()}
-            </div>
-          )}
-          {/* Dropdown */}
-          <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border-default opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all z-50 overflow-hidden" style={{ background: '#13131d' }}>
-            <div className="p-3 border-b border-border-subtle">
-              <div className="text-text-primary text-xs font-medium">{user?.name}</div>
-              <div className="text-text-muted text-xs truncate">{user?.email}</div>
-            </div>
-            <button
-              onClick={logout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-accent-red hover:bg-bg-hover transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M6 3H3v10h3M10 5l3 3-3 3M6 8h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-              Sign out
-            </button>
-          </div>
-        </div>
+        <div style={{ width: 1, height: 16, background: '#1f1f32' }} />
+        <span style={{ color: '#555570' }}>US-IDE v1.0</span>
       </div>
     </div>
+  )
+}
+
+const btnStyle = {
+  display: 'flex', alignItems: 'center', border: 'none',
+  cursor: 'pointer', borderRadius: 6, padding: '4px 8px',
+  background: 'none', transition: 'background 0.12s, color 0.12s',
+  fontFamily: 'Inter, system-ui, sans-serif',
+}
+
+function Btn({ onClick, title, icon, label, primary, active, disabled }) {
+  const [hov, setHov] = React.useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        ...btnStyle,
+        gap: 5,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        background: primary
+          ? (hov ? 'rgba(0,232,136,0.2)' : 'rgba(0,232,136,0.1)')
+          : active
+            ? 'rgba(124,109,245,0.15)'
+            : hov ? 'rgba(255,255,255,0.06)' : 'none',
+        border: primary ? '1px solid rgba(0,232,136,0.3)' : active ? '1px solid rgba(124,109,245,0.3)' : '1px solid transparent',
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{icon}</span>
+      <span style={{ fontSize: 11, color: primary ? '#00e888' : active ? '#9d8fff' : '#888898', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+    </button>
   )
 }

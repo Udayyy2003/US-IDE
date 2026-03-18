@@ -1,0 +1,7 @@
+US-IDE
+
+This is a placeholder license for the US-IDE installer packaging.
+All rights reserved for project authors. This file is included to
+enable NSIS installer generation during development builds.
+
+Replace with your real license text before releasing publicly.

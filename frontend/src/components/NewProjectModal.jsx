@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
-import { createProject } from '../utils/api'
 import { useIDE } from '../contexts/IDEContext'
 
 const LANGUAGES = [
-  { id: 'python', label: 'Python', icon: '🐍', ext: '.py', color: '#3776AB' },
-  { id: 'c',      label: 'C',      icon: '⚙️', ext: '.c',   color: '#A8B9CC' },
-  { id: 'cpp',    label: 'C++',    icon: '⚡', ext: '.cpp', color: '#00599C' },
-  { id: 'java',   label: 'Java',   icon: '☕', ext: '.java', color: '#ED8B00' },
+  { id: 'python', label: 'Python', icon: '🐍', ext: '.py' },
+  { id: 'c', label: 'C', icon: '⚙️', ext: '.c' },
+  { id: 'cpp', label: 'C++', icon: '⚡', ext: '.cpp' },
+  { id: 'java', label: 'Java', icon: '☕', ext: '.java' },
 ]
 
 export default function NewProjectModal({ onClose, onProjectCreated }) {
@@ -16,174 +15,127 @@ export default function NewProjectModal({ onClose, onProjectCreated }) {
   const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { setCurrentProject, setCurrentFile, setCurrentLanguage, setEditorContent } = useIDE()
+
+  const { openProject, openFileInTab } = useIDE()
+
+  const defaultFileName = language ? `main${language.ext}` : ''
 
   const handleCreate = async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await createProject({
-        projectName,
-        language: language.id,
-        fileName: fileName || '',
-      })
-      const { projectName: pName, language: lang, fileName: fName, content } = res.data
-      
-      setCurrentProject({ name: pName, language: lang })
-      setCurrentLanguage(lang)
-      setCurrentFile(fName)
-      setEditorContent(content)
-      onProjectCreated({ name: pName, language: lang, fileName: fName, content })
-      onClose()
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create project')
+      const folderPath = await window.api.selectFolder()
+      if (!folderPath) { setLoading(false); return }
+
+      const finalFile = (fileName.trim() || defaultFileName)
+      const res = await window.api.createProject(folderPath, projectName.trim(), language.id, finalFile, '')
+
+      if (res.success) {
+        openProject({ name: projectName.trim(), path: res.projectPath })
+        openFileInTab({ path: res.filePath, name: finalFile, content: '', language: language.id })
+        onProjectCreated?.()
+        onClose()
+      } else {
+        throw new Error(res.error)
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to create project')
     } finally {
       setLoading(false)
     }
   }
 
-  const selectedLang = LANGUAGES.find(l => l.id === language?.id)
-  const defaultFileName = selectedLang ? `main${selectedLang.ext}` : ''
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-md rounded-2xl border border-border-default animate-slide-up" style={{ background: '#13131d', boxShadow: '0 0 60px rgba(124, 109, 245, 0.2)' }}>
-        
+    <div style={{ position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <div style={{ width: '100%', maxWidth: 420, background: '#13131e', border: '1px solid #2a2a40', borderRadius: 16, overflow: 'hidden', boxShadow: '0 0 60px rgba(124,109,245,0.2)', fontFamily: 'Inter, system-ui, sans-serif' }}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid #1f1f2e' }}>
           <div>
-            <h2 className="text-text-primary font-semibold text-lg">New Project</h2>
-            <p className="text-text-muted text-sm mt-0.5">Step {step} of 3</p>
+            <div style={{ color: '#e8e8f0', fontWeight: 600, fontSize: 16 }}>New Project</div>
+            <div style={{ color: '#555570', fontSize: 12, marginTop: 2 }}>Step {step} of 3</div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors">
-            ✕
-          </button>
+          <button onClick={onClose} style={{ ...closeBtnStyle }}>✕</button>
         </div>
 
-        {/* Progress */}
-        <div className="flex gap-1 px-6 pt-4">
+        {/* Progress dots */}
+        <div style={{ display: 'flex', gap: 6, padding: '14px 20px 0' }}>
           {[1, 2, 3].map(s => (
-            <div key={s} className="flex-1 h-1 rounded-full transition-all" style={{ background: s <= step ? '#7c6df5' : '#2a2a3d' }} />
+            <div key={s} style={{ flex: 1, height: 3, borderRadius: 99, background: s <= step ? '#7c6df5' : '#2a2a3d', transition: 'background 0.2s' }} />
           ))}
         </div>
 
-        <div className="p-6 space-y-4">
+        <div style={{ padding: '16px 20px 20px' }}>
           {error && (
-            <div className="p-3 rounded-lg text-sm" style={{ background: 'rgba(255, 77, 109, 0.1)', border: '1px solid rgba(255, 77, 109, 0.3)', color: '#ff4d6d' }}>
+            <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,77,109,0.08)', border: '1px solid rgba(255,77,109,0.25)', color: '#ff4d6d', fontSize: 13 }}>
               {error}
             </div>
           )}
 
-          {/* Step 1: Project Name */}
+          {/* Step 1: Name */}
           {step === 1 && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <label className="block text-text-secondary text-sm mb-2 font-medium">Project Name</label>
-                <input
-                  type="text"
-                  value={projectName}
-                  onChange={e => setProjectName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && projectName.trim() && setStep(2)}
-                  placeholder="my-awesome-project"
-                  autoFocus
-                  className="w-full px-4 py-3 rounded-xl text-text-primary font-mono text-sm outline-none transition-all"
-                  style={{ background: '#0a0a0f', border: '1px solid #2a2a3d', caretColor: '#7c6df5' }}
-                  onFocus={e => e.target.style.borderColor = '#7c6df5'}
-                  onBlur={e => e.target.style.borderColor = '#2a2a3d'}
-                />
-              </div>
-              <button
-                onClick={() => projectName.trim() && setStep(2)}
-                disabled={!projectName.trim()}
-                className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40"
-                style={{ background: projectName.trim() ? '#7c6df5' : '#2a2a3d', color: '#fff' }}
-              >
-                Continue →
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label style={{ color: '#aaaacc', fontSize: 13, fontWeight: 500 }}>Project Name</label>
+              <input
+                type="text" autoFocus
+                value={projectName}
+                onChange={e => setProjectName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && projectName.trim() && setStep(2)}
+                placeholder="my-awesome-project"
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = '#7c6df5'}
+                onBlur={e => e.target.style.borderColor = '#2a2a3d'}
+              />
+              <button onClick={() => projectName.trim() && setStep(2)} disabled={!projectName.trim()} style={{ ...primaryBtn, opacity: projectName.trim() ? 1 : 0.4 }}>Continue →</button>
             </div>
           )}
 
           {/* Step 2: Language */}
           {step === 2 && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <label className="block text-text-secondary text-sm mb-3 font-medium">Select Language</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {LANGUAGES.map(lang => (
-                    <button
-                      key={lang.id}
-                      onClick={() => setLanguage(lang)}
-                      className="p-4 rounded-xl border text-left transition-all"
-                      style={{
-                        background: language?.id === lang.id ? 'rgba(124, 109, 245, 0.15)' : '#0a0a0f',
-                        borderColor: language?.id === lang.id ? '#7c6df5' : '#2a2a3d',
-                      }}
-                    >
-                      <div className="text-2xl mb-2">{lang.icon}</div>
-                      <div className="text-text-primary font-semibold text-sm">{lang.label}</div>
-                      <div className="text-text-muted text-xs font-mono">{lang.ext}</div>
-                    </button>
-                  ))}
-                </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label style={{ color: '#aaaacc', fontSize: 13, fontWeight: 500 }}>Select Language</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {LANGUAGES.map(lang => (
+                  <button key={lang.id} onClick={() => setLanguage(lang)}
+                    style={{ padding: '14px', borderRadius: 12, border: `1px solid ${language?.id === lang.id ? '#7c6df5' : '#2a2a3d'}`, background: language?.id === lang.id ? 'rgba(124,109,245,0.12)' : '#0a0a0f', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+                  >
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{lang.icon}</div>
+                    <div style={{ color: '#e8e8f0', fontWeight: 600, fontSize: 13 }}>{lang.label}</div>
+                    <div style={{ color: '#555570', fontSize: 11, fontFamily: 'monospace' }}>{lang.ext}</div>
+                  </button>
+                ))}
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => setStep(1)} className="flex-1 py-3 rounded-xl text-sm text-text-secondary transition-colors hover:text-text-primary" style={{ border: '1px solid #2a2a3d' }}>
-                  ← Back
-                </button>
-                <button
-                  onClick={() => language && setStep(3)}
-                  disabled={!language}
-                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40"
-                  style={{ background: language ? '#7c6df5' : '#2a2a3d', color: '#fff' }}
-                >
-                  Continue →
-                </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setStep(1)} style={secondaryBtn}>← Back</button>
+                <button onClick={() => language && setStep(3)} disabled={!language} style={{ ...primaryBtn, flex: 1, opacity: language ? 1 : 0.4 }}>Continue →</button>
               </div>
             </div>
           )}
 
-          {/* Step 3: File Name */}
+          {/* Step 3: File name + create */}
           {step === 3 && (
-            <div className="space-y-4 animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label className="block text-text-secondary text-sm mb-2 font-medium">
-                  File Name <span className="text-text-muted">(optional)</span>
-                </label>
+                <label style={{ color: '#aaaacc', fontSize: 13, fontWeight: 500 }}>File Name <span style={{ color: '#555570' }}>(optional)</span></label>
                 <input
-                  type="text"
+                  type="text" autoFocus
                   value={fileName}
                   onChange={e => setFileName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleCreate()}
                   placeholder={defaultFileName}
-                  autoFocus
-                  className="w-full px-4 py-3 rounded-xl text-text-primary font-mono text-sm outline-none transition-all"
-                  style={{ background: '#0a0a0f', border: '1px solid #2a2a3d', caretColor: '#7c6df5' }}
+                  style={{ ...inputStyle, marginTop: 8 }}
                   onFocus={e => e.target.style.borderColor = '#7c6df5'}
                   onBlur={e => e.target.style.borderColor = '#2a2a3d'}
                 />
-                <p className="text-text-muted text-xs mt-2">Leave blank to use default: <span className="font-mono text-accent-primary">{defaultFileName}</span></p>
               </div>
-
-              {/* Summary */}
-              <div className="p-3 rounded-xl" style={{ background: 'rgba(124, 109, 245, 0.08)', border: '1px solid rgba(124, 109, 245, 0.2)' }}>
-                <div className="text-xs space-y-1 font-mono">
-                  <div><span className="text-text-muted">project:</span> <span className="text-accent-primary">{projectName}</span></div>
-                  <div><span className="text-text-muted">language:</span> <span className="text-accent-primary">{language?.label}</span></div>
-                  <div><span className="text-text-muted">file:</span> <span className="text-accent-primary">{fileName || defaultFileName}</span></div>
-                </div>
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(124,109,245,0.06)', border: '1px solid rgba(124,109,245,0.18)', fontSize: 12, fontFamily: 'monospace', color: '#9d8fff' }}>
+                <div>project: <span style={{ color: '#e8e8f0' }}>{projectName}</span></div>
+                <div>language: <span style={{ color: '#e8e8f0' }}>{language?.label}</span></div>
+                <div>file: <span style={{ color: '#e8e8f0' }}>{fileName || defaultFileName}</span></div>
               </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => setStep(2)} className="flex-1 py-3 rounded-xl text-sm text-text-secondary transition-colors hover:text-text-primary" style={{ border: '1px solid #2a2a3d' }}>
-                  ← Back
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={loading}
-                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition-all"
-                  style={{ background: '#7c6df5', color: '#fff' }}
-                >
-                  {loading ? <span className="flex items-center justify-center gap-2"><div className="spinner" style={{ width: 16, height: 16 }} /> Creating...</span> : '🚀 Create Project'}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setStep(2)} style={secondaryBtn}>← Back</button>
+                <button onClick={handleCreate} disabled={loading} style={{ ...primaryBtn, flex: 1 }}>
+                  {loading ? 'Creating…' : '🚀 Create Project'}
                 </button>
               </div>
             </div>
@@ -192,4 +144,26 @@ export default function NewProjectModal({ onClose, onProjectCreated }) {
       </div>
     </div>
   )
+}
+
+const inputStyle = {
+  width: '100%', padding: '10px 14px', borderRadius: 10, fontSize: 13,
+  background: '#080810', border: '1px solid #2a2a3d', color: '#e8e8f0',
+  outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box',
+  caretColor: '#7c6df5', transition: 'border-color 0.15s',
+}
+const primaryBtn = {
+  padding: '11px', borderRadius: 10, background: '#7c6df5', color: '#fff',
+  border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+  fontFamily: 'Inter, system-ui, sans-serif', transition: 'opacity 0.15s',
+}
+const secondaryBtn = {
+  padding: '11px 16px', borderRadius: 10, background: 'none',
+  border: '1px solid #2a2a3d', color: '#aaaacc', cursor: 'pointer',
+  fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif',
+}
+const closeBtnStyle = {
+  width: 30, height: 30, borderRadius: 8, background: 'none',
+  border: 'none', color: '#555570', cursor: 'pointer', fontSize: 16,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
 }
