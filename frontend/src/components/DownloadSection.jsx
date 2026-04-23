@@ -45,11 +45,11 @@ export default function DownloadSection({ downloadLink }) {
           </div>
           <div>
             <div style={{ color: '#8888a0', fontSize: '13px', marginBottom: '8px' }}>Version</div>
-            <div style={{ color: '#fff', fontWeight: 600 }}>v1.0.0</div>
+            <div style={{ color: '#fff', fontWeight: 600 }}>v1.0.1</div>
           </div>
           <div>
             <div style={{ color: '#8888a0', fontSize: '13px', marginBottom: '8px' }}>Size</div>
-            <div style={{ color: '#fff', fontWeight: 600 }}>~90 MB</div>
+            <div style={{ color: '#fff', fontWeight: 600 }}>~92 MB</div>
           </div>
         </div>
 

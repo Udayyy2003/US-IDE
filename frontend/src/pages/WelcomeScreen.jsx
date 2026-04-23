@@ -111,7 +111,7 @@ export default function WelcomeScreen({ onWorkspaceOpened }) {
           </div>
           <div>
             <div style={{ color: '#e8e8f0', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>US-IDE</div>
-            <div style={{ color: '#555570', fontSize: 12, fontFamily: 'monospace' }}>AI-Powered Desktop IDE  v1.0</div>
+            <div style={{ color: '#555570', fontSize: 12, fontFamily: 'monospace' }}>AI-Powered Desktop IDE  v1.0.1</div>
           </div>
         </div>
 

@@ -3,9 +3,10 @@ import HeroSection from './HeroSection';
 import DownloadSection from './DownloadSection';
 import FeaturesGrid from './FeaturesGrid';
 import InstallGuide from './InstallGuide';
+import ReleaseNotes from './ReleaseNotes';
 
 export default function BrowserFallback() {
-  const downloadLink = 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.0.0/US-IDE-Setup.exe';
+  const downloadLink = 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.0.1/US-IDE-Setup.exe';
 
   return (
     <div style={{
@@ -48,6 +49,8 @@ export default function BrowserFallback() {
       <HeroSection downloadLink={downloadLink} />
       
       <DownloadSection downloadLink={downloadLink} />
+
+      <ReleaseNotes />
       
       <FeaturesGrid />
       

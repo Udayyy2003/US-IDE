@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import ReleaseNotes from '../components/ReleaseNotes'
 
 // Language snippets for the animated background
 const CODE_SNIPPETS = [
@@ -139,7 +140,7 @@ export default function LoginPage() {
             US
           </div>
           <span className="text-text-primary font-semibold text-lg tracking-tight">US-IDE</span>
-          <span className="px-2 py-0.5 text-xs rounded-full font-mono" style={{ background: 'rgba(124, 109, 245, 0.15)', color: '#9d8fff' }}>v1.0</span>
+          <span className="px-2 py-0.5 text-xs rounded-full font-mono" style={{ background: 'rgba(124, 109, 245, 0.15)', color: '#9d8fff' }}>v1.0.1</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-text-muted text-sm">Built for developers</span>
@@ -269,6 +270,16 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Release Info Section */}
+      <div className="relative z-10 border-t border-border-subtle bg-bg-primary/50 backdrop-blur-md">
+        <ReleaseNotes />
+      </div>
+
+      {/* Footer */}
+      <footer className="relative z-10 py-12 border-t border-border-subtle text-center">
+        <p className="text-text-muted text-sm">Built with ❤️ by Uday & Sujal</p>
+      </footer>
     </div>
   )
 }
