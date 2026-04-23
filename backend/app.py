@@ -37,6 +37,14 @@ app.secret_key = os.getenv("SECRET_KEY", "us-ide-secret-key-change-in-production
 # CORS configuration
 CORS(app)
 
+@app.route("/")
+def index():
+    return jsonify({
+        "status": "online",
+        "message": "US-IDE Backend API is running",
+        "version": "1.0.0"
+    })
+
 # Initialize Groq client
 groq_api_key = os.getenv("GROQ_API_KEY", "")
 if groq_api_key:
