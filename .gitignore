@@ -56,8 +56,15 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+*.txt
+*.pptx
+*.ppt
+*.pdf
 
 # ========================
 # User Generated Data
 # ========================
 backend/projects/
+frontend/src/components/Logo.jsx
+build/
+**/build/

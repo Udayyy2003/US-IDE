@@ -15,11 +15,17 @@ export const createProject = () => Promise.reject(new Error('Projects API remove
 export const getProjectFiles = () => Promise.resolve({ data: { files: [] } })
 
 // ─── Files ──────────────────────────────────
-export const createFile = () => Promise.reject(new Error('File API removed'))
+export const createFile = (root_path, path) => api.post('/api/create-file', { root_path, path })
 
-export const saveFile = () => Promise.reject(new Error('File API removed'))
+export const createFolder = (root_path, path) => api.post('/api/create-folder', { root_path, path })
 
-export const loadFile = () => Promise.reject(new Error('File API removed'))
+export const saveFile = (path, content) => api.post('/api/save-file', { path, content })
+
+export const loadFile = (path) => api.post('/api/read-file', { path })
+
+export const deleteFile = (path) => api.post('/api/delete-file', { path })
+
+export const renameFile = (path, new_name) => api.post('/api/rename-file', { path, new_name })
 
 // ─── Code Execution ─────────────────────────
 export const runCode = () => Promise.reject(new Error('Execution API removed'))

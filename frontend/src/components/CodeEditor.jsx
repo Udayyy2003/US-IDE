@@ -1,6 +1,8 @@
-import React, { useRef, useCallback } from 'react'
+import React, { useRef, useCallback, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
-import { useIDE } from '../contexts/IDEContext'
+import { useTabs } from '../contexts/TabContext'
+import { useEditor } from '../contexts/EditorContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 // Map our internal language names to Monaco language IDs
 const MONACO_LANG = {
@@ -51,27 +53,74 @@ const USID_THEME = {
   },
 }
 
-export default function CodeEditor({ onSave }) {
+export default function CodeEditor({ onSave, value, language, onChange }) {
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
-  const {
-    editorContent, currentLanguage, currentFile,
-    openFiles, handleEditorChange,
-  } = useIDE()
+  
+  const { activeTabIndex, closeTab } = useTabs()
+  const { currentFile } = useEditor()
+  const { settings } = useSettings()
 
-  const language = MONACO_LANG[currentLanguage] || 'plaintext'
+  const monacoLanguage = MONACO_LANG[language] || 'plaintext'
+
+  // Ref to track latest state for Monaco commands
+  const stateRef = useRef({ activeTabIndex, closeTab })
+  stateRef.current = { activeTabIndex, closeTab }
+
+  const getMonacoTheme = (theme) => { 
+    switch(theme) { 
+      case "light": 
+        return "vs"; 
+      case "dark": 
+        return "vs-dark"; 
+      case "dracula": 
+        return "dracula"; 
+      case "monokai": 
+        return "monokai"; 
+      default: 
+        return "us-ide-dark"; 
+    } 
+  }; 
 
   const handleMount = useCallback((editor, monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
 
-    // Register and apply custom theme
+    // Define custom themes
     monaco.editor.defineTheme('us-ide-dark', USID_THEME)
-    monaco.editor.setTheme('us-ide-dark')
+    monaco.editor.defineTheme("dracula", { 
+      base: "vs-dark", 
+      inherit: true, 
+      rules: [], 
+      colors: { 
+        "editor.background": "#282a36", 
+        "editor.foreground": "#f8f8f2" 
+      } 
+    }); 
+    monaco.editor.defineTheme("monokai", { 
+      base: "vs-dark", 
+      inherit: true, 
+      rules: [], 
+      colors: { 
+        "editor.background": "#272822", 
+        "editor.foreground": "#f8f8f2" 
+      } 
+    }); 
+
+    // Apply initial theme
+    monaco.editor.setTheme(getMonacoTheme(settings.theme));
 
     // ─ Ctrl+S → Save ───────────
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       onSave?.()
+    })
+
+    // ─ Ctrl+W → Close Tab ───────
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
+      const { activeTabIndex } = stateRef.current
+      if (activeTabIndex !== -1) {
+        window.dispatchEvent(new CustomEvent('close-tab', { detail: { index: activeTabIndex } }))
+      }
     })
 
     // ─ Alt+Z → Word Wrap toggle ─
@@ -79,34 +128,59 @@ export default function CodeEditor({ onSave }) {
       const current = editor.getOption(monaco.editor.EditorOption.wordWrap)
       editor.updateOptions({ wordWrap: current === 'on' ? 'off' : 'on' })
     })
-  }, [onSave])
+  }, [onSave, settings.theme]); // Added settings.theme to dependencies
 
-  const handleChange = useCallback((value) => {
-    if (currentFile) {
-      handleEditorChange(value, currentFile)
+  useEffect(() => {
+    if (monacoRef.current && editorRef.current) {
+      monacoRef.current.editor.setTheme(getMonacoTheme(settings.theme));
+      editorRef.current.updateOptions({
+        fontFamily: settings.fontFamily,
+        fontSize: settings.fontSize,
+        lineNumbers: settings.lineNumbers ? 'on' : 'off',
+        wordWrap: settings.wordWrap ? 'on' : 'off',
+      });
     }
-  }, [currentFile, handleEditorChange])
+  }, [settings.theme, settings.fontFamily, settings.fontSize, settings.lineNumbers, settings.wordWrap]);
+
+  const handleChange = useCallback((val) => {
+    onChange?.(val)
+  }, [onChange])
+
+  const loadingIndicator = (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      height: '100%', background: '#0d0d18', gap: '16px'
+    }}>
+      <div style={{
+        width: '32px', height: '32px', border: '3px solid rgba(124,109,245,0.1)',
+        borderTopColor: '#7c6df5', borderRadius: '50%', animation: 'spin 1s linear infinite'
+      }} />
+      <div style={{ color: '#555570', fontSize: '13px', fontWeight: 500 }}>Initializing editor...</div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0d0d18' }}>
       {currentFile ? (
         <Editor
           height="100%"
-          language={language}
-          value={editorContent}
+          language={monacoLanguage}
+          value={value}
+          theme={getMonacoTheme(settings.theme)}
           onChange={handleChange}
           onMount={handleMount}
-          theme="us-ide-dark"
+          loading={loadingIndicator}
           options={{
-            fontSize: 13,
-            fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-            fontLigatures: true,
-            minimap: { enabled: true, maxColumn: 80 },
+            fontSize: settings.fontSize,
+            fontFamily: settings.fontFamily,
+            lineNumbers: settings.lineNumbers ? 'on' : 'off',
+            wordWrap: settings.wordWrap ? 'on' : 'off',
+            minimap: { enabled: settings.layout !== 'focus' },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             padding: { top: 12, bottom: 12 },
-            lineNumbers: 'on',
-            renderWhitespace: 'none',
+            fontLigatures: true,
             smoothScrolling: true,
             cursorBlinking: 'smooth',
             cursorSmoothCaretAnimation: 'on',

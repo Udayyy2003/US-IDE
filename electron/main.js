@@ -3,8 +3,24 @@
  * Professional VS Code-style desktop IDE
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, session } = require('electron');
+
+// Enable Speech API in Electron
+app.commandLine.appendSwitch('enable-speech-input');
+app.commandLine.appendSwitch('enable-media-stream');
+app.commandLine.appendSwitch('disable-features', 'FedCm');
+
+const pty = require('node-pty');
 const path = require('path');
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('uside', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('uside');
+}
+
 const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -20,6 +36,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let mainWindow;
 let currentProcess = null; // Track the running user process
 let activeWatchers = {}; // directory path → fs.FSWatcher
+let terminals = {}; // id → ptyProcess
 
 // ─────────────────────────────────────────────
 // Workspace Persistence
@@ -49,23 +66,81 @@ function writeWorkspace(data) {
 // Window Creation
 // ─────────────────────────────────────────────
 
+function handleDeepLink(url) {
+  if (!url) return;
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol === 'uside:' && parsedUrl.hostname === 'auth') {
+      const token = parsedUrl.searchParams.get('token');
+      const userData = parsedUrl.searchParams.get('user');
+      if (token && userData && mainWindow) {
+        mainWindow.webContents.send('auth-success', { token, user: JSON.parse(decodeURIComponent(userData)) });
+        mainWindow.focus();
+      }
+    }
+  } catch (e) {
+    console.error('[DeepLink] Error parsing URL:', e.message);
+  }
+}
+
+// Force single instance
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      // On Windows, the deep link URL is passed in the command line
+      const url = commandLine.pop();
+      handleDeepLink(url);
+    }
+  });
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    frame: true,
-    titleBarStyle: 'default',
+    width: 1200,
+    height: 800,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
       nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      // Fix: CSP settings for Monaco and Fonts
       webSecurity: true,
     },
+    frame: false,
+    title: 'US-IDE',
     icon: path.join(__dirname, 'icon.ico'),
     show: false, // show after ready-to-show
   });
+
+  // CSP: Allow fonts from gstatic.com and cdnjs/jsdelivr
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:5000 http://localhost:5173 https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://accounts.google.com; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
+          "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://accounts.google.com; " +
+          "worker-src 'self' blob:; " +
+          "img-src 'self' data: blob: https://*; " +
+          "connect-src 'self' http://localhost:5000 http://localhost:5173 https://api.groq.com https://cdn.jsdelivr.net https://accounts.google.com;"
+        ]
+      }
+    });
+  });
+
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.setAutoHideMenuBar(true);
 
   // Show when ready to avoid white flash
   mainWindow.once('ready-to-show', () => {
@@ -206,6 +281,16 @@ function buildMenu() {
 // ─────────────────────────────────────────────
 
 app.on('ready', () => {
+  // Handle permissions for microphone access (Voice Search)
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media'];
+    if (allowedPermissions.includes(permission)) {
+      callback(true); // Approve microphone access
+    } else {
+      callback(false); // Deny others
+    }
+  });
+
   buildMenu();
   createWindow();
 });
@@ -225,6 +310,26 @@ app.on('activate', () => {
 // ─────────────────────────────────────────────
 // Helper: Path Safety Check
 // ─────────────────────────────────────────────
+
+function buildTreeRecursive(dirPath) {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    return entries
+      .filter(e => !e.name.startsWith('.') || e.name === '.gitignore')
+      .map(e => {
+        const fullPath = path.join(dirPath, e.name);
+        const isDirectory = e.isDirectory();
+        return {
+          name: e.name,
+          isDirectory,
+          path: fullPath,
+          children: isDirectory ? buildTreeRecursive(fullPath) : undefined
+        };
+      });
+  } catch (e) {
+    return [];
+  }
+}
 
 function isInside(root, target) {
   if (!root || !target) return false;
@@ -260,15 +365,7 @@ async function resolveExecutable(command, candidates = []) {
   return null;
 }
 
-// ─────────────────────────────────────────────
-// Helper: Send terminal event to renderer
-// ─────────────────────────────────────────────
 
-function sendTerminal(data) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('terminal-output', data);
-  }
-}
 
 // ─────────────────────────────────────────────
 // IPC: Workspace Persistence
@@ -307,8 +404,14 @@ ipcMain.handle('select-folder', async () => {
   return filePaths[0];
 });
 
-ipcMain.handle('read-dir', async (_event, dirPath) => {
+ipcMain.handle('read-dir', async (_event, dirPath, recursive = false) => {
   try {
+    if (recursive) {
+      return {
+        success: true,
+        files: buildTreeRecursive(dirPath)
+      };
+    }
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     return {
       success: true,
@@ -356,7 +459,7 @@ ipcMain.handle('open-file', async (_event, manualPath) => {
     properties: ['openFile'],
     title: 'Open File — US-IDE',
     filters: [
-      { name: 'Code Files', extensions: ['py', 'c', 'cpp', 'java', 'js', 'ts', 'html', 'css', 'json', 'md', 'txt'] },
+      { name: 'Code Files', extensions: ['py', 'c', 'cpp', 'java', 'js', 'ts', 'typescript', 'html', 'css', 'json', 'md', 'txt'] },
       { name: 'All Files', extensions: ['*'] },
     ],
   });
@@ -383,16 +486,14 @@ ipcMain.handle('save-file', async (_event, workspaceRoot, filePath, content) => 
   }
 });
 
-ipcMain.handle('create-file', async (_event, workspaceRoot, filePath) => {
+ipcMain.handle('create-file', async (_event, workspaceRoot, filePath, content = '') => {
   if (!isInside(workspaceRoot, filePath)) {
     return { success: false, error: 'Attempted to create file outside of workspace.' };
   }
   try {
-    if (!fs.existsSync(filePath)) {
-      // Ensure parent directory exists before writing file
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, '', 'utf8');
-    }
+    // Ensure parent directory exists before writing file
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content, 'utf8');
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -403,12 +504,25 @@ ipcMain.handle('rename-file', async (_event, workspaceRoot, targetPath, newName)
   try {
     const dir = path.dirname(targetPath);
     const newPath = path.join(dir, newName);
+
+    // Path sanity check
     if (workspaceRoot && (!isInside(workspaceRoot, targetPath) || !isInside(workspaceRoot, newPath))) {
       return { success: false, error: 'Operation outside workspace is not allowed' };
     }
-    fs.renameSync(targetPath, newPath);
+
+    // Windows Case-Only Rename Handle:
+    // fs.rename on Windows fails or does nothing if renaming "file.txt" to "File.txt"
+    if (process.platform === 'win32' && targetPath.toLowerCase() === newPath.toLowerCase() && targetPath !== newPath) {
+      const tempPath = targetPath + '.tmp_rename';
+      await fs.promises.rename(targetPath, tempPath);
+      await fs.promises.rename(tempPath, newPath);
+    } else {
+      await fs.promises.rename(targetPath, newPath);
+    }
+
     return { success: true, path: newPath };
   } catch (e) {
+    console.error('[Main] Rename Error:', e.message);
     return { success: false, error: e.message };
   }
 });
@@ -418,12 +532,9 @@ ipcMain.handle('delete-file', async (_event, workspaceRoot, targetPath) => {
     if (workspaceRoot && !isInside(workspaceRoot, targetPath)) {
       return { success: false, error: 'Operation outside workspace is not allowed' };
     }
-    const stat = fs.statSync(targetPath);
-    if (stat.isDirectory()) {
-      fs.rmSync(targetPath, { recursive: true, force: true });
-    } else {
-      fs.unlinkSync(targetPath);
-    }
+    // Use fs.promises.rm which can handle both files and directories recursively.
+    // This is simpler, non-blocking, and more consistent than the previous implementation.
+    await fs.promises.rm(targetPath, { recursive: true });
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -491,247 +602,209 @@ ipcMain.handle('unwatch-dir', async (_event, dirPath) => {
   return { success: true };
 });
 
-ipcMain.handle('terminal-input', (_event, data) => {
-    if (currentProcess && currentProcess.stdin && currentProcess.stdin.writable) {
-      // Windows programs usually expect \r\n for line endings in stdin
-      const chunk = data === '\r' ? '\r\n' : data;
-      currentProcess.stdin.write(chunk, 'utf-8');
-    }
-  });
-
 // ─────────────────────────────────────────────
-// IPC: Code Execution
+// IPC: Code Execution (DEPRECATED: Using PTY Instead)
 // ─────────────────────────────────────────────
 
-ipcMain.handle('execute-code', async (_event, { language, filePath, projectPath }) => {
-  if (!filePath) {
-    sendTerminal({ type: 'error', text: 'No file to run.' });
-    return;
-  }
+ipcMain.handle('execute-code', () => {
+  console.warn('[Main] execute-code disabled: using PTY terminal instead');
+  return { success: false, error: 'DEPRECATED: Using PTY terminal instead' };
+});
 
-  const fileName = path.basename(filePath);
-  const cwd = projectPath || path.dirname(filePath);
+ipcMain.handle('stop-process', () => {
+  console.warn('[Main] stop-process disabled: using Ctrl+C in PTY instead');
+  return { success: true };
+});
 
-  // Header
-  sendTerminal({ type: 'system', text: `\r\n\x1b[36m► Running ${fileName}\x1b[0m\r\n` });
+// ─────────────────────────────────────────────
+// IPC: Terminal (node-pty)
+// ─────────────────────────────────────────────
 
-  const commandMap = {
-    python: { check: 'python', command: 'python', args: [filePath], fallback: 'py' },
-    c: { check: 'gcc', compile: 'gcc', run: path.join(cwd, path.basename(filePath, '.c') + '.exe') },
-    cpp: { check: 'g++', compile: 'g++', run: path.join(cwd, path.basename(filePath, '.cpp') + '.exe') },
-    java: { check: 'javac', compile: 'javac', run: 'java', className: path.basename(filePath, '.java') },
-  };
-
-  const lang = commandMap[language];
-  if (!lang) {
-    sendTerminal({ type: 'error', text: `\x1b[31m✗ Unsupported language: ${language}\x1b[0m\r\n` });
-    sendTerminal({ type: 'done', exitCode: 1 });
-    return;
-  }
-
-  // Resolve compiler/runtime with Windows-friendly fallbacks
-  const candidates = {
-    gcc: [
-      'C:\\msys64\\mingw64\\bin\\gcc.exe',
-      'C:\\msys64\\mingw32\\bin\\gcc.exe',
-      'C:\\MinGW\\bin\\gcc.exe',
-      'C:\\Program Files\\mingw-w64\\mingw64\\bin\\gcc.exe',
-      'C:\\Program Files\\mingw-w64\\bin\\gcc.exe',
-      'C:\\TDM-GCC-64\\bin\\gcc.exe',
-    ],
-    'g++': [
-      'C:\\msys64\\mingw64\\bin\\g++.exe',
-      'C:\\msys64\\mingw32\\bin\\g++.exe',
-      'C:\\MinGW\\bin\\g++.exe',
-      'C:\\Program Files\\mingw-w64\\mingw64\\bin\\g++.exe',
-      'C:\\Program Files\\mingw-w64\\bin\\g++.exe',
-      'C:\\TDM-GCC-64\\bin\\g++.exe',
-    ],
-    python: [
-      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python314', 'python.exe'),
-      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python313', 'python.exe'),
-      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'python.exe'),
-      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'python.exe'),
-      path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python310', 'python.exe'),
-      'C:\\Python314\\python.exe',
-      'C:\\Python313\\python.exe',
-      'C:\\Python312\\python.exe',
-      'C:\\Python311\\python.exe',
-      'C:\\Program Files\\Python314\\python.exe',
-      'C:\\Program Files\\Python313\\python.exe',
-      'C:\\Program Files\\Python312\\python.exe',
-      'C:\\Program Files\\Python311\\python.exe',
-    ],
-    javac: [],
-    clang: ['C:\\Program Files\\LLVM\\bin\\clang.exe'],
-    'clang++': ['C:\\Program Files\\LLVM\\bin\\clang++.exe'],
-  };
-
-  let toolPath = await resolveExecutable(lang.check, candidates[lang.check] || []);
-
-  // Python fallback to py launcher
-  if (!toolPath && language === 'python') {
-    const pyLauncher = await resolveExecutable('py', []);
-    if (pyLauncher) {
-      lang.command = 'py';
-      toolPath = pyLauncher;
+ipcMain.handle('terminal-create', (event, id, cwd) => {
+  const isWin = process.platform === 'win32';
+  
+  // 1. Resolve Shell
+  let shellPath = isWin ? 'powershell.exe' : 'bash';
+  if (isWin) {
+    const commonPaths = [
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', // Prefer PowerShell
+      process.env.COMSPEC, // cmd.exe
+      'C:\\Windows\\System32\\cmd.exe',
+      'powershell.exe',
+      'cmd.exe'
+    ];
+    for (const p of commonPaths) {
+      if (p) {
+        try {
+          // If it's a full path, check if it exists. If it's just a name, assume it's in PATH.
+          if (path.isAbsolute(p)) {
+            if (fs.existsSync(p)) {
+              shellPath = p;
+              break;
+            }
+          } else {
+            shellPath = p; // Assume it's in PATH (like 'powershell.exe')
+            break;
+          }
+        } catch (_) {}
+      }
     }
   }
 
-  // Fallback to clang/clang++ if GCC/G++ not found
-  const fallback = { gcc: 'clang', 'g++': 'clang++' }[lang.check];
-  if (!toolPath && fallback) {
-    const fbPath = await resolveExecutable(fallback, candidates[fallback] || []);
-    if (fbPath) {
-      lang.compile = fallback; // use fallback compiler
-      toolPath = fbPath;
+  // 2. Resolve CWD
+  let finalCwd = os.homedir();
+  if (cwd) {
+    try {
+      const resolvedCwd = path.resolve(cwd);
+      if (fs.existsSync(resolvedCwd) && fs.statSync(resolvedCwd).isDirectory()) {
+        finalCwd = resolvedCwd;
+      }
+    } catch (e) {
+      console.warn(`[Terminal] Invalid CWD: ${cwd}, falling back to home.`);
     }
   }
 
-  // If still missing, print actionable install steps
-  if (!toolPath) {
-    const steps = {
-      gcc: `• GCC (MinGW-w64) not found.\r\n\r\nSteps to install on Windows:\r\n1) Install MSYS2 (https://www.msys2.org)\r\n2) Open "MSYS2 MSYS" and run:\r\n   pacman -S mingw-w64-x86_64-gcc\r\n3) Add to PATH:\r\n   C:\\msys64\\mingw64\\bin\r\n4) Reopen US-IDE\r\n\r\nAlternative: Install MinGW-w64 and add its bin folder to PATH.\r\n`,
-      'g++': `• G++ (MinGW-w64) not found.\r\n\r\nSteps to install on Windows:\r\n1) Install MSYS2 (https://www.msys2.org)\r\n2) Open "MSYS2 MSYS" and run:\r\n   pacman -S mingw-w64-x86_64-gcc\r\n3) Ensure mingw64\\bin has g++.exe and is in PATH.\r\n4) Reopen US-IDE\r\n\r\nAlternative: Install LLVM (clang++) and add C:\\Program Files\\LLVM\\bin to PATH.\r\n`,
-      python: `• Python not found. Download from https://python.org and check "Add python.exe to PATH".\r\n`,
-      javac: `• JDK not found. Install from https://adoptium.net and add JDK\\bin to PATH.\r\n`,
-    };
-    sendTerminal({
-      type: 'error',
-      text: `\x1b[31m✗ ${lang.check} not found.\x1b[0m\r\n${steps[lang.check] || ''}`,
+  // 3. Spawn PTY
+  try {
+    // Sanitize environment variables to prevent inheritance of VS Code specific settings
+    // if US-IDE is being run from within VS Code's terminal.
+    const sanitizedEnv = { ...process.env };
+    const varsToRemove = [
+      'TERM_PROGRAM',
+      'TERM_PROGRAM_VERSION',
+      'VSCODE_GIT_IPC_HANDLE',
+      'VSCODE_GIT_ASKPASS_NODE',
+      'VSCODE_GIT_ASKPASS_MAIN',
+      'VSCODE_GIT_ASKPASS_EXTRA_ARGS',
+      'VSCODE_IPC_HOOK_CLI',
+      'VSCODE_NODE_JS_DIE_ON_UNCaught_EXCEPTION',
+      'VSCODE_STDOUT_LOG_LEVEL',
+      'VSCODE_VERBOSE_LOGGING',
+      'ELECTRON_RUN_AS_NODE',
+      'VSCODE_LOG_STACK',
+      'VSCODE_LOG_LEVEL',
+      'VSCODE_CLI',
+      'VSCODE_AMD_ENTRYPOINT',
+      'VSCODE_CWD',
+      'VSCODE_HANDLES_UNCAUGHT_ERRORS',
+      'VSCODE_IPC_HOOK',
+      'VSCODE_NLS_CONFIG',
+      'VSCODE_PORT',
+      'VSCODE_PID'
+    ];
+    varsToRemove.forEach(v => delete sanitizedEnv[v]);
+
+    // Use -NoProfile to avoid loading external scripts that might hijack the shell
+    const shellArgs = (isWin && shellPath.toLowerCase().includes('powershell')) ? ['-NoProfile', '-ExecutionPolicy', 'Bypass'] : [];
+
+    const ptyProcess = pty.spawn(shellPath, shellArgs, {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 30,
+      cwd: finalCwd,
+      useConpty: true, // Use modern Windows PTY for better interactive app support
+      env: { 
+        ...sanitizedEnv, 
+        LANG: 'en_US.UTF-8',
+        TERM: 'xterm-256color'
+      },
     });
-    sendTerminal({ type: 'done', exitCode: 1 });
-    return;
-  }
 
-  // Helper: run a process and stream output
-  const runProcess = (cmd, args, workDir, extraPathDir, useShell = true) => {
-    return new Promise((resolve) => {
-      const env = { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1' };
-      if (extraPathDir) {
-        const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
-        env[pathKey] = `${extraPathDir}${path.delimiter}${env[pathKey] || ''}`;
+    terminals[id] = ptyProcess;
+
+    ptyProcess.onData((data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`terminal-data-${id}`, data);
       }
-      
-      // On Windows, use shell: true for compilers/interpreters, 
-      // but direct execution for compiled binaries to improve interactivity.
-      currentProcess = spawn(cmd, args, { 
-        cwd: workDir, 
-        windowsHide: true, 
-        env, 
-        shell: useShell,
-        stdio: ['pipe', 'pipe', 'pipe'] 
-      });
-
-      if (currentProcess.stdin) {
-        currentProcess.stdin.setEncoding('utf-8');
-      }
-
-      currentProcess.stdout.on('data', (data) => {
-        const text = data.toString()
-          .replace(/\r\n/g, '\n')
-          .replace(/\r/g, '\n')
-          .replace(/\n/g, '\r\n');
-        sendTerminal({ type: 'stdout', text });
-      });
-
-      currentProcess.stderr.on('data', (data) => {
-        const text = data.toString()
-          .replace(/\r\n/g, '\n')
-          .replace(/\r/g, '\n')
-          .replace(/\n/g, '\r\n');
-        sendTerminal({ type: 'stderr', text: `\x1b[31m${text}\x1b[0m` });
-      });
-
-      currentProcess.on('close', (code) => {
-        currentProcess = null;
-        resolve(code);
-      });
-
-      currentProcess.on('error', (err) => {
-        sendTerminal({ type: 'error', text: `\x1b[31m✗ Process error: ${err.message}\x1b[0m\r\n` });
-        currentProcess = null;
-        resolve(1);
-      });
     });
-  };
 
-  let exitCode = 0;
-
-  // Execute based on language
-
-  if (language === 'python') {
-    // toolPath already resolved via candidates + PATH
-    // Use useShell: false to avoid quoting issues with spaces in paths on Windows
-    exitCode = await runProcess(toolPath, [filePath], cwd, path.dirname(toolPath), false);
-  }
-  else if (language === 'c' || language === 'cpp') {
-    // ...
-    const buildDir = path.join(cwd, 'build');
-    try { if (!fs.existsSync(buildDir)) fs.mkdirSync(buildDir, { recursive: true }); } catch (_) { }
-    const baseName = path.basename(filePath, path.extname(filePath));
-    const exeName = baseName + (language === 'c' ? '_c.exe' : '_cpp.exe');
-    const outputExe = path.join(buildDir, exeName);
-
-    sendTerminal({ type: 'system', text: `\x1b[90mCompiling...\x1b[0m\r\n` });
-    const compilerCmd = toolPath; // resolved path to gcc/g++ or clang/clang++
-    const compileArgs = [filePath, '-o', outputExe];
-    // Use useShell: false for compilation as well to be safer with spaces
-    const compileCode = await runProcess(compilerCmd, compileArgs, cwd, path.dirname(compilerCmd), false);
-
-    if (compileCode !== 0) {
-      sendTerminal({ type: 'error', text: `\x1b[31m✗ Compilation failed (exit ${compileCode})\x1b[0m\r\n` });
-      sendTerminal({ type: 'stderr', text: `\x1b[90mHint:\x1b[0m Ensure compiler bin is in PATH: ${path.dirname(compilerCmd)}\r\n` });
-      exitCode = compileCode;
-    } else {
-        sendTerminal({ type: 'system', text: `\x1b[32m✓ Compiled successfully\x1b[0m\r\n` });
-        sendTerminal({ type: 'system', text: `\x1b[90mRunning ${path.relative(cwd, outputExe)}\x1b[0m\r\n` });
-        // When running compiled binary, use direct execution (useShell = false) for better interactive input
-        exitCode = await runProcess(outputExe, [], cwd, path.dirname(compilerCmd), false);
+    ptyProcess.onExit(({ exitCode, signal }) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`terminal-exit-${id}`, { exitCode, signal });
       }
+      delete terminals[id];
+    });
 
-  } else if (language === 'java') {
-
-    const className = path.basename(filePath, '.java');
-    const sourceDir = path.dirname(filePath);
-
-    sendTerminal({ type: 'system', text: `\x1b[90mCompiling...\x1b[0m\r\n` });
-
-    // Try to resolve javac path
-    const javacPath = await resolveExecutable('javac', []);
-    const javaPath = await resolveExecutable('java', []);
-
-    const compileCode = await runProcess(javacPath || 'javac', [filePath], sourceDir, null, !javacPath);
-
-    if (compileCode !== 0) {
-      sendTerminal({ type: 'error', text: `\x1b[31m✗ Compilation failed (exit ${compileCode})\x1b[0m\r\n` });
-      exitCode = compileCode;
-
-    } else {
-
-      sendTerminal({ type: 'system', text: `\x1b[32m✓ Compiled successfully\x1b[0m\r\n` });
-
-      sendTerminal({ type: 'system', text: `\x1b[90mRunning ${className}\x1b[0m\r\n` });
-
-      exitCode = await runProcess(
-        javaPath || 'java',
-        ['-cp', sourceDir, className],
-        sourceDir,
-        null,
-        !javaPath
-      );
-
-    }
+    return true;
+  } catch (err) {
+    const errorMsg = `PTY Spawn Error: ${err.message}. Shell: ${shellPath}, CWD: ${finalCwd}`;
+    console.error(`[Terminal Create] ${errorMsg}`, err);
+    throw new Error(errorMsg);
   }
+});
 
-  // Footer
-  const finishColor = exitCode === 0 ? '\x1b[32m' : '\x1b[31m';
-  const finishIcon = exitCode === 0 ? '✓' : '✗';
-  sendTerminal({
-    type: 'done',
-    exitCode,
-    text: `\r\n${finishColor}${finishIcon} Finished — Exit Code: ${exitCode}\x1b[0m\r\n`,
-  });
+ipcMain.handle('terminal-write', (_event, id, data) => {
+  if (terminals[id]) {
+    terminals[id].write(data);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('terminal-resize', (_event, id, { cols, rows }) => {
+  if (terminals[id]) {
+    terminals[id].resize(cols, rows);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('terminal-kill', (_event, id) => {
+  if (terminals[id]) {
+    terminals[id].kill();
+    delete terminals[id];
+    return true;
+  }
+  return false;
+});
+
+
+
+
+
+
+
+
+
+// ─────────────────────────────────────────────
+// IPC: Window Management
+// ─────────────────────────────────────────────
+
+ipcMain.handle('window-minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow?.unmaximize();
+  } else {
+    mainWindow?.maximize();
+  }
+});
+
+ipcMain.handle('window-close', () => {
+  mainWindow?.close();
+});
+
+// ─────────────────────────────────────────────
+// IPC: Authentication
+// ─────────────────────────────────────────────
+
+ipcMain.handle('open-external', async (_event, url) => {
+  if (url) {
+    shell.openExternal(url);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('clipboard-copy', async (_event, text) => {
+  const { clipboard } = require('electron');
+  if (text) {
+    clipboard.writeText(text);
+    return true;
+  }
+  return false;
 });
 
 // ─────────────────────────────────────────────

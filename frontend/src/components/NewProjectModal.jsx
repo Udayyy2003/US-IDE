@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { useIDE } from '../contexts/IDEContext'
+import { useFiles } from '../contexts/FileContext'
+import { useTabs } from '../contexts/TabContext'
 
 const LANGUAGES = [
   { id: 'python', label: 'Python', icon: '🐍', ext: '.py' },
@@ -16,7 +17,8 @@ export default function NewProjectModal({ onClose, onProjectCreated }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const { openProject, openFileInTab } = useIDE()
+  const { openProject } = useFiles()
+  const { openTab } = useTabs()
 
   const defaultFileName = language ? `main${language.ext}` : ''
 
@@ -32,7 +34,7 @@ export default function NewProjectModal({ onClose, onProjectCreated }) {
 
       if (res.success) {
         openProject({ name: projectName.trim(), path: res.projectPath })
-        openFileInTab({ path: res.filePath, name: finalFile, content: '', language: language.id })
+        openTab({ path: res.filePath, name: finalFile, content: '', language: language.id })
         onProjectCreated?.()
         onClose()
       } else {

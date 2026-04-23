@@ -15,11 +15,11 @@ const api = {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   openFile: (path) => ipcRenderer.invoke('open-file', path),
   saveFile: (workspaceRoot, filePath, content) => ipcRenderer.invoke('save-file', workspaceRoot, filePath, content),
-  createFile: (workspaceRoot, filePath) => ipcRenderer.invoke('create-file', workspaceRoot, filePath),
+  createFile: (workspaceRoot, filePath, content) => ipcRenderer.invoke('create-file', workspaceRoot, filePath, content),
   createFolder: (workspaceRoot, dirPath) => ipcRenderer.invoke('create-folder', workspaceRoot, dirPath),
   renameFile: (root, target, newName) => ipcRenderer.invoke('rename-file', root, target, newName),
   deleteFile: (root, target) => ipcRenderer.invoke('delete-file', root, target),
-  readDir: (dirPath) => ipcRenderer.invoke('read-dir', dirPath),
+  readDir: (dirPath, recursive = false) => ipcRenderer.invoke('read-dir', dirPath, recursive),
 
   // ─── Project Creation ────────────────────────
   createProject: (folder, name, lang, file, content) =>
@@ -34,15 +34,22 @@ const api = {
     return () => ipcRenderer.removeListener('dir-changed', handler);
   },
 
-  // ─── Code Execution ──────────────────────────
-  executeCode: (args) => ipcRenderer.invoke('execute-code', args),
-  sendTerminalInput: (data) => ipcRenderer.invoke('terminal-input', data),
-
-  // ─── Terminal Output Listener ─────────────────
-  onTerminalOutput: (callback) => {
+  // ─── Multi-Terminal (node-pty) ───────────────
+  createTerminal: (id, cwd) => ipcRenderer.invoke('terminal-create', id, cwd),
+  writeTerminal: (id, data) => ipcRenderer.invoke('terminal-write', id, data),
+  resizeTerminal: (id, cols, rows) => ipcRenderer.invoke('terminal-resize', id, { cols, rows }),
+  killTerminal: (id) => ipcRenderer.invoke('terminal-kill', id),
+  onTerminalData: (id, callback) => {
+    const channel = `terminal-data-${id}`;
     const handler = (_event, data) => callback(data);
-    ipcRenderer.on('terminal-output', handler);
-    return () => ipcRenderer.removeListener('terminal-output', handler);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onTerminalExit: (id, callback) => {
+    const channel = `terminal-exit-${id}`;
+    const handler = (_event, exitData) => callback(exitData);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
   },
 
   // ─── Menu Events ─────────────────────────────
@@ -69,6 +76,22 @@ const api = {
 
   // ─── App Info ────────────────────────────────
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // ─── Window Management ───────────────────────
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+
+  // ─── Authentication ──────────────────────────
+  onAuthSuccess: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('auth-success', handler);
+    return () => ipcRenderer.removeListener('auth-success', handler);
+  },
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // ─── Clipboard ───────────────────────────────
+  copyToClipboard: (text) => ipcRenderer.invoke('clipboard-copy', text),
 };
 
 contextBridge.exposeInMainWorld('api', api);

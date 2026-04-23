@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react'
+  import React, { useEffect, useState } from 'react'
 import { getProjects, getProjectFiles, loadFile } from '../utils/api'
-import { useIDE } from '../contexts/IDEContext'
+import { useFiles } from '../contexts/FileContext'
+import { useTabs } from '../contexts/TabContext'
+import { getFileIcon, getIconColor } from '../utils/fileIcons'
+import { FaFolder } from 'react-icons/fa'
 
-const LANG_ICONS = { python: '🐍', c: '⚙️', cpp: '⚡', java: '☕' }
 const LANG_EXT = { python: '.py', c: '.c', cpp: '.cpp', java: '.java' }
 
 function getLangFromExt(filename) {
@@ -14,7 +16,8 @@ function getLangFromExt(filename) {
 export default function ProjectSelector({ onClose, onNewProject }) {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
-  const { setCurrentProject, setCurrentFile, setCurrentLanguage, setEditorContent, setFileTree } = useIDE()
+  const { setCurrentProject, setFileTree } = useFiles()
+  const { openTab } = useTabs()
 
   useEffect(() => {
     fetchProjects()
@@ -39,16 +42,18 @@ export default function ProjectSelector({ onClose, onNewProject }) {
       const files = filesRes.data.files || []
 
       setCurrentProject(project)
-      setCurrentLanguage(project.language)
       setFileTree(files)
 
       // Load first file
       if (files.length > 0) {
         const mainFile = files.find(f => !f.includes('/')) || files[0]
         const contentRes = await loadFile(project.name, mainFile)
-        setCurrentFile(mainFile)
-        setEditorContent(contentRes.data.content)
-        setCurrentLanguage(getLangFromExt(mainFile))
+        openTab({ 
+          path: mainFile, 
+          name: mainFile.split('/').pop(), 
+          content: contentRes.data.content, 
+          language: getLangFromExt(mainFile) 
+        })
       }
 
       onClose()
@@ -85,7 +90,9 @@ export default function ProjectSelector({ onClose, onNewProject }) {
             </div>
           ) : projects.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-4xl mb-3">📁</div>
+              <div className="text-4xl mb-3 flex justify-center">
+                <FaFolder color="#2a2a3d" />
+              </div>
               <p className="text-text-secondary font-semibold text-sm">No projects yet</p>
               <p className="text-text-muted text-xs mt-1">Create your first project to get started</p>
               <button
@@ -108,7 +115,12 @@ export default function ProjectSelector({ onClose, onNewProject }) {
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
                 >
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: 'rgba(124, 109, 245, 0.1)' }}>
-                    {LANG_ICONS[project.language] || '📁'}
+                    {(() => {
+                      const dummyFileName = `dummy${LANG_EXT[project.language] || ''}`;
+                      const Icon = getFileIcon(dummyFileName, false);
+                      const color = getIconColor(dummyFileName, false);
+                      return <Icon size={24} color={color} />;
+                    })()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-text-primary font-semibold text-sm truncate">{project.name}</div>

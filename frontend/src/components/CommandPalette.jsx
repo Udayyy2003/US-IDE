@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useIDE } from '../contexts/IDEContext'
+import { useEditor } from '../contexts/EditorContext'
 
 const ALL_COMMANDS = (actions) => [
     { id: 'save', label: 'File: Save', icon: '💾', shortcut: 'Ctrl+S', action: actions.onSave },
@@ -12,7 +12,7 @@ const ALL_COMMANDS = (actions) => [
 ]
 
 export default function CommandPalette({ onClose, onSave, onRun, onOpenFile, onOpenFolder, onNewFile, onToggleTerminal }) {
-    const { setAutoSave } = useIDE()
+    const { setAutoSave } = useEditor()
     const [query, setQuery] = useState('')
     const [selected, setSelected] = useState(0)
     const inputRef = useRef(null)

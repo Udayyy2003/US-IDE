@@ -122,11 +122,21 @@ export default function LoginPage() {
         }} />
       </div>
 
-      {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-8 py-4 border-b border-border-subtle">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c6df5, #00d4ff)' }}>
-            <span className="text-white font-bold text-xs">US</span>
+      {/* Navbar */}
+      <nav className="relative z-10 flex items-center justify-between px-8 py-6 border-b border-border-subtle" style={{ background: 'rgba(10, 10, 15, 0.5)', backdropFilter: 'blur(8px)' }}>
+        <div className="flex items-center gap-3">
+          <div style={{ 
+            fontSize: '18px', 
+            fontWeight: 700, 
+            color: '#fff', 
+            marginRight: '8px',
+            letterSpacing: '-0.5px',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+            US
           </div>
           <span className="text-text-primary font-semibold text-lg tracking-tight">US-IDE</span>
           <span className="px-2 py-0.5 text-xs rounded-full font-mono" style={{ background: 'rgba(124, 109, 245, 0.15)', color: '#9d8fff' }}>v1.0</span>

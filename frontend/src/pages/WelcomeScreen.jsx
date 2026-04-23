@@ -1,24 +1,34 @@
 import React, { useEffect, useState } from 'react'
-import { useIDE } from '../contexts/IDEContext'
+import { useFiles } from '../contexts/FileContext'
 
 export default function WelcomeScreen({ onWorkspaceOpened }) {
-  const { openProject } = useIDE()
+  const { openProject } = useFiles()
   const [lastPath, setLastPath] = useState(null)
   const [loading, setLoading] = useState(false)
-  const isElectron = typeof window !== 'undefined' && !!window.api
+  const isElectron = typeof window !== 'undefined' && (!!window.api || !!window.electron)
+
+  // Ensure window.api is consistently available if either exists
+  if (typeof window !== 'undefined' && !window.api && window.electron) {
+    window.api = window.electron;
+  }
 
   // Load last workspace on mount
   useEffect(() => {
-    window.api?.getWorkspace().then(data => {
-      if (data?.lastPath) setLastPath(data.lastPath)
-    }).catch(() => { })
+    if (window.api?.getWorkspace) {
+      window.api.getWorkspace().then(data => {
+        if (data?.lastPath) setLastPath(data.lastPath)
+      }).catch(() => { })
+    }
   }, [])
 
   const handleOpenFolder = async () => {
     setLoading(true)
     try {
-      if (!isElectron) { alert('This page is running in a browser. Please run "npm run dev" to launch the Electron app for filesystem access.'); return }
-      const folder = await window.api?.openFolder?.()
+      if (!isElectron || !window.api) { 
+        alert('This page is running in a browser. Please run "npm run dev" to launch the Electron app for filesystem access.'); 
+        return;
+      }
+      const folder = await window.api.openFolder?.()
       if (folder) {
         const name = folder.split(/[\\/]/).pop()
         openProject({ name, path: folder })
@@ -32,8 +42,11 @@ export default function WelcomeScreen({ onWorkspaceOpened }) {
   const handleOpenFile = async () => {
     setLoading(true)
     try {
-      if (!isElectron) { alert('This page is running in a browser. Please run "npm run dev" to launch the Electron app for filesystem access.'); return }
-      const res = await window.api?.openFile?.()
+      if (!isElectron || !window.api) { 
+        alert('This page is running in a browser. Please run "npm run dev" to launch the Electron app for filesystem access.'); 
+        return;
+      }
+      const res = await window.api.openFile?.()
       if (res?.path) {
         const name = res.path.split(/[\\/]/).pop()
         const ext = name.split('.').pop().toLowerCase()
@@ -83,8 +96,18 @@ export default function WelcomeScreen({ onWorkspaceOpened }) {
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 520, padding: '0 24px' }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg,#7c6df5,#00d4ff)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#fff', fontWeight: 800, fontSize: 16, fontFamily: 'monospace' }}>US</span>
+          <div style={{ 
+            fontSize: '24px', 
+            fontWeight: 700, 
+            color: '#fff', 
+            marginRight: '8px',
+            letterSpacing: '-1px',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+            US
           </div>
           <div>
             <div style={{ color: '#e8e8f0', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>US-IDE</div>

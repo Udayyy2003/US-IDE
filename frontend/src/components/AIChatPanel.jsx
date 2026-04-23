@@ -1,6 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { atomDark, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { aiChat } from '../utils/api'
-import { useIDE } from '../contexts/IDEContext'
+import { useEditor } from '../contexts/EditorContext'
+import { useFiles } from '../contexts/FileContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useTabs } from '../contexts/TabContext'
+import { useSettings } from '../contexts/SettingsContext'
+import { getFileIcon, getIconColor } from '../utils/fileIcons'
+import { FolderOpen, Settings } from 'lucide-react'
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 const CopyIcon = () => (
@@ -37,19 +47,37 @@ const XIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 )
 
+const CheckCircleIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+)
+
+const PlusIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+)
+const ReplaceIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3L21 7L17 11"></path><path d="M3 13L7 17L3 21"></path><path d="M21 7H10C7.79086 7 6 8.79086 6 11V13"></path><path d="M3 17H14C16.2091 17 18 15.2091 18 13V11"></path></svg>
+)
+const FileIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+)
+
 // ─── Message Content Renderer ──────────────────────────────────────────────
-function MessageContent({ text, role, attachments }) {
-  const parts = text.split(/(```[\s\S]*?```)/g)
-  const [copied, setCopied] = useState(false)
+const MessageContent = ({ text, role, attachments, onAction, disableInsert, theme }) => {
+  const [copiedText, setCopiedText] = useState(null)
 
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setCopiedText(content)
+    setTimeout(() => setCopiedText(null), 2000)
   }
 
+  // Parse for special metadata
+  const createMatch = text.match(/\[CREATE_FILE:\s*([^\]]+)\]/)
+  const modifyMatch = text.match(/\[MODIFY_FILE:\s*([^\]]+)\]/)
+  const cleanText = text.replace(/\[(CREATE|MODIFY)_FILE:\s*[^\]]+\]/g, '').trim()
+
   return (
-    <div style={{ fontSize: '13px', lineHeight: '1.6', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="markdown-content" style={{ fontSize: '14px', lineHeight: '1.6', color: role === 'user' ? '#fff' : '#d1d1e0' }}>
       {attachments && attachments.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
           {attachments.map((file, idx) => (
@@ -60,7 +88,12 @@ function MessageContent({ text, role, attachments }) {
               {file.type.startsWith('image/') ? (
                 <img src={file.preview} alt="attached" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
               ) : (
-                <span style={{ fontSize: '14px' }}>📄</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>
+                  {(() => {
+                    const Icon = getFileIcon(file.name, false);
+                    return <Icon size={14} color={getIconColor(file.name, false)} />;
+                  })()}
+                </span>
               )}
               <span style={{ fontSize: '11px', color: '#8888a0', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {file.name}
@@ -69,50 +102,125 @@ function MessageContent({ text, role, attachments }) {
           ))}
         </div>
       )}
-      {parts.map((part, i) => {
-        if (part.startsWith('```')) {
-          const lines = part.slice(3, -3).split('\n')
-          const lang = lines[0].trim() || 'code'
-          const code = lines.slice(1).join('\n')
-          return (
-            <div key={i} style={{ margin: '12px 0', borderRadius: '8px', overflow: 'hidden', border: '1px solid #2a2a3d', background: '#0d0d18' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: '#1a1a2e', borderBottom: '1px solid #2a2a3d' }}>
-                <span style={{ fontSize: '11px', color: '#8888a0', fontFamily: 'monospace', textTransform: 'lowercase' }}>{lang}</span>
-                <button 
-                  onClick={() => handleCopy(code)}
-                  style={{ background: 'none', border: 'none', color: '#8888a0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
-                >
-                  {copied ? <CheckIcon /> : <CopyIcon />}
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-              <pre style={{
-                padding: '12px', margin: 0, overflowX: 'auto', 
-                fontFamily: '"JetBrains Mono", monospace', fontSize: '12px', 
-                whiteSpace: 'pre', background: '#0a0a0f'
-              }}>
-                <code style={{ color: '#e0e0f0' }}>{code}</code>
-              </pre>
+      
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ node, inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            // Trim leading newlines from AI generated code
+            const rawCode = String(children).replace(/\n$/, '')
+            const code = rawCode.startsWith('\n') ? rawCode.substring(1) : rawCode;
+            if (!inline && match) {
+              const lang = match[1]
+              return (
+                <div style={{ margin: '16px 0', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', background: '#0d0d18' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontSize: '11px', color: '#8888a0', fontFamily: 'monospace', textTransform: 'lowercase', fontWeight: 600 }}>{lang}</span>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {createMatch ? (
+                        <button 
+                          onClick={() => onAction?.('create', code, createMatch[1])}
+                          style={{ 
+                            background: 'rgba(var(--accent-color-rgb), 0.1)', border: '1px solid rgba(var(--accent-color-rgb), 0.3)', 
+                            color: 'var(--accent-color)', cursor: 'pointer', 
+                            display: 'flex', alignItems: 'center', gap: '6px', 
+                            padding: '4px 8px', borderRadius: '6px',
+                            fontSize: '11px', fontWeight: 700 
+                          }}
+                        >
+                          <PlusIcon /> Create {createMatch[1]}
+                        </button>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => onAction?.('insert', code)}
+                            disabled={disableInsert}
+                            title={disableInsert ? "Open a file to insert code" : "Append code to the current file"}
+                            style={{ 
+                              background: 'none', border: 'none', 
+                              color: disableInsert ? '#444466' : 'var(--accent-color)', 
+                              cursor: disableInsert ? 'not-allowed' : 'pointer', 
+                              display: 'flex', alignItems: 'center', gap: '6px', 
+                              fontSize: '11px', fontWeight: 700 
+                            }}
+                          >
+                            <EditIcon /> Insert
+                          </button>
+                          <button 
+                            onClick={() => onAction?.('replace', code)}
+                            disabled={disableInsert}
+                            title={disableInsert ? "Open a file to replace code" : "Replace all content in current file"}
+                            style={{ 
+                              background: 'none', border: 'none', 
+                              color: disableInsert ? '#444466' : 'var(--accent-color)', 
+                              cursor: disableInsert ? 'not-allowed' : 'pointer', 
+                              display: 'flex', alignItems: 'center', gap: '6px', 
+                              fontSize: '11px', fontWeight: 700 
+                            }}
+                          >
+                            <ReplaceIcon /> Replace
+                          </button>
+                        </>
+                      )}
+                      <div style={{ width: 1, height: 14, background: '#2a2a3d', margin: '0 4px' }} />
+                      <button 
+                        onClick={() => handleCopy(code)}
+                        style={{ background: 'none', border: 'none', color: '#8888a0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600 }}
+                      >
+                        {copiedText === code ? <CheckIcon /> : <CopyIcon />}
+                      </button>
+                    </div>
+                  </div>
+                  <SyntaxHighlighter
+                    style={theme === 'light' ? vs : atomDark}
+                    language={lang}
+                    PreTag="div"
+                    customStyle={{ margin: 0, padding: '16px', background: theme === 'light' ? '#f5f5f5' : '#0a0a0f', fontSize: '12.5px' }}
+                    {...props}
+                  >
+                    {code}
+                  </SyntaxHighlighter>
+                </div>
+              )
+            }
+            return (
+              <code style={{ 
+                background: 'rgba(var(--accent-color-rgb), 0.15)', 
+                color: 'var(--accent-color)', 
+                padding: '2px 6px', 
+                borderRadius: '5px', 
+                fontFamily: '"JetBrains Mono", monospace', 
+                fontSize: '0.9em',
+                fontWeight: 500
+              }} {...props}>
+                {children}
+              </code>
+            )
+          },
+          p: ({ children }) => <p style={{ marginBottom: '16px' }}>{children}</p>,
+          ul: ({ children }) => <ul style={{ paddingLeft: '20px', marginBottom: '16px' }}>{children}</ul>,
+          ol: ({ children }) => <ol style={{ paddingLeft: '20px', marginBottom: '16px' }}>{children}</ol>,
+          li: ({ children }) => <li style={{ marginBottom: '8px' }}>{children}</li>,
+          h1: ({ children }) => <h1 style={{ fontSize: '1.5em', fontWeight: 700, marginBottom: '16px', color: '#fff' }}>{children}</h1>,
+          h2: ({ children }) => <h2 style={{ fontSize: '1.3em', fontWeight: 700, marginBottom: '14px', color: '#fff' }}>{children}</h2>,
+          h3: ({ children }) => <h3 style={{ fontSize: '1.1em', fontWeight: 700, marginBottom: '12px', color: '#fff' }}>{children}</h3>,
+          blockquote: ({ children }) => (
+            <blockquote style={{ borderLeft: '3px solid #7c6df5', paddingLeft: '16px', margin: '16px 0', color: '#8888a0', fontStyle: 'italic' }}>
+              {children}
+            </blockquote>
+          ),
+          table: ({ children }) => (
+            <div style={{ overflowX: 'auto', marginBottom: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>{children}</table>
             </div>
-          )
-        }
-        
-        // Inline formatting (bold and inline code)
-        const inlineParts = part.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
-        return (
-          <span key={i}>
-            {inlineParts.map((ip, j) => {
-              if (ip.startsWith('**') && ip.endsWith('**')) {
-                return <strong key={j} style={{ color: '#fff', fontWeight: 600 }}>{ip.slice(2, -2)}</strong>
-              }
-              if (ip.startsWith('`') && ip.endsWith('`')) {
-                return <code key={j} style={{ background: '#1e1e2e', color: '#ae9fff', padding: '2px 5px', borderRadius: '4px', fontFamily: '"JetBrains Mono", monospace', fontSize: '12px' }}>{ip.slice(1, -1)}</code>
-              }
-              return <span key={j} style={{ color: role === 'user' ? '#fff' : '#d1d1e0' }}>{ip}</span>
-            })}
-          </span>
-        )
-      })}
+          ),
+          th: ({ children }) => <th style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700 }}>{children}</th>,
+          td: ({ children }) => <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{children}</td>,
+        }}
+      >
+        {cleanText}
+      </ReactMarkdown>
     </div>
   )
 }
@@ -125,23 +233,37 @@ const QUICK_ACTIONS = [
 ]
 
 export default function AIChatPanel() {
-  const { editorContent, currentLanguage, currentFile } = useIDE()
+  const { editorContent, currentLanguage, currentFile, replaceContent, insertAtCursor } = useEditor()
+  const { workspaceRoot, fileTree, createFile, loadFiles } = useFiles()
+  const { openFile } = useTabs()
+  const { user, logout } = useAuth()
+  const { settings } = useSettings()
   const [messages, setMessages] = useState([{
     id: 'welcome',
     role: 'assistant',
-    content: "Hi! I'm your **US-IDE Personal Assistant**. I've been custom-built to help you navigate your project and write code efficiently.\n\nI can help you:\n- Explain and write code\n- Fix bugs and errors\n- Optimize performance\n- Generate new code",
+    content: "Welcome to **US Assistant** 🚀\n\nTo get started:\n1. Open a folder\n2. Create or select a file\n3. Start coding with AI",
     timestamp: Date.now(),
   }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [initializing, setInitializing] = useState(true)
   const [reactions, setReactions] = useState({}) // { msgId: 'like' | 'dislike' }
   const [copiedId, setCopiedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [isListening, setIsListening] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState({ show: false, code: '', type: '', filename: '' })
+  const [javaFolderSuggestion, setJavaFolderSuggestion] = useState(null) // { code, filename }
+  
   const endRef = useRef(null)
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  // ─── Initializing State ───
+  useEffect(() => {
+    const timer = setTimeout(() => setInitializing(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ─── Speech Recognition Setup ──────────────────────────────────────────
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -201,10 +323,23 @@ export default function AIChatPanel() {
     })
   }
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   const sendMessage = async (text, action = 'chat', isEdit = false) => {
-    if ((!text.trim() && action === 'chat') || loading) return
+    if ((!text.trim() && attachments.length === 0 && action === 'chat') || loading) return
+
+    // ─── Context Check ───
+    if (!workspaceRoot) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: "⚠️ **No project folder open.** Please open a folder to enable AI context and file operations.",
+        timestamp: Date.now(),
+        error: true,
+        showOpenFolderBtn: true
+      }])
+      return
+    }
     
     const userMsg = { 
       id: Date.now().toString(), 
@@ -230,8 +365,6 @@ export default function AIChatPanel() {
     setLoading(true)
 
     try {
-      // In a real app, you'd upload files here. 
-      // For now, we pass file names as context to the AI.
       const fileContext = attachments.length > 0 
         ? `\n\nAttachments: ${attachments.map(a => a.name).join(', ')}`
         : ''
@@ -241,6 +374,9 @@ export default function AIChatPanel() {
         code: editorContent,
         language: currentLanguage,
         action,
+        current_file: currentFile,
+        file_tree: fileTree,
+        workspace_root: workspaceRoot,
         history: newMsgs.slice(-8).map(m => ({ role: m.role, content: m.content })),
       })
       
@@ -288,61 +424,226 @@ export default function AIChatPanel() {
     setReactions(prev => ({ ...prev, [id]: prev[id] === type ? null : type }))
   }
 
+  const handleActionRequest = (type, code, filename = '') => {
+    // Check for Java folder structure requirement
+    const isJava = filename?.toLowerCase().endsWith('.java') || code?.includes('public class') || currentLanguage === 'java';
+    
+    if (type === 'create' && isJava) {
+      // Auto-structure Java files: java/ClassName/ClassName.java
+      let baseName = filename.replace('.java', '');
+      if (baseName.includes('/')) {
+        baseName = baseName.split('/').pop();
+      }
+      
+      // If filename is just "HelloWorld.java", transform to "java/HelloWorld/HelloWorld.java"
+      let structuredFilename = filename;
+      if (!filename.startsWith('java/')) {
+        structuredFilename = `java/${baseName}/${baseName}.java`;
+      } else if (filename.split('/').length === 2) {
+        // Handle "java/HelloWorld.java" -> "java/HelloWorld/HelloWorld.java"
+        structuredFilename = `java/${baseName}/${baseName}.java`;
+      }
+      
+      setShowConfirmModal({ show: true, type, code, filename: structuredFilename });
+      return;
+    }
+
+    setShowConfirmModal({ show: true, type, code, filename });
+  }
+
+  const handleJavaFolderDecision = (useFolder) => {
+    const { code, filename } = javaFolderSuggestion;
+    const finalFilename = useFolder ? `java/${filename}` : filename;
+    setJavaFolderSuggestion(null);
+    setShowConfirmModal({ show: true, type: 'create', code, filename: finalFilename });
+  }
+
+  const confirmAction = async () => {
+    const { type, code, filename } = showConfirmModal;
+    
+    try {
+      if (type === 'insert') {
+        insertAtCursor(code);
+      } else if (type === 'replace') {
+        replaceContent(code);
+      } else if (type === 'create' && filename) {
+        // Construct the full path in the workspace root
+        const fullPath = workspaceRoot.includes('\\') 
+          ? `${workspaceRoot}\\${filename}` 
+          : `${workspaceRoot}/${filename}`;
+        
+        console.log("[AI] Creating file at:", fullPath);
+        
+        // Pass the code directly to createFile so it's written instantly
+        const res = await createFile(fullPath, code);
+        if (res.success) {
+          // Force a refresh of the file tree
+          await loadFiles();
+          
+          // Open the newly created file in a new tab with the code already present
+          openFile({
+            name: filename,
+            path: fullPath,
+            content: code,
+            language: filename.split('.').pop() || 'plaintext'
+          });
+          
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: `✅ Successfully created **${filename}** with the generated code.`,
+            timestamp: Date.now()
+          }]);
+        } else {
+          throw new Error(res.error || "Failed to create file");
+        }
+      }
+    } catch (err) {
+      console.error("[AI Action Error]", err);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ **Error:** ${err.message}`,
+        timestamp: Date.now(),
+        error: true
+      }]);
+    }
+    
+    setShowConfirmModal({ show: false, code: '', type: '', filename: '' });
+  }
+
+  const handleOpenFolderRequest = async () => {
+    if (window.api) {
+      const folder = await window.api.openFolder();
+      if (folder) {
+        const name = folder.split(/[\\/]/).pop();
+        openProject({ name, path: folder });
+        // Send a followup message to AI to let it know folder is open
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `✅ Opened folder: **${name}**. You can now ask me to create or modify files!`,
+          timestamp: Date.now()
+        }]);
+      }
+    } else {
+      alert("Open Folder is only available in the desktop app.");
+    }
+  }
+
+  if (initializing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#0a0a0f', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid rgba(124,109,245,0.1)', borderTopColor: '#7c6df5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <div style={{ color: '#8888a0', fontSize: '13px', fontWeight: 500 }}>Initializing AI workspace...</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0a0a0f', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0a0a0f', fontFamily: 'Inter, system-ui, sans-serif', position: 'relative' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #1f1f2e', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#0a0a0f', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ 
-            width: 34, height: 34, borderRadius: '10px', 
-            background: 'linear-gradient(135deg, #7c6df5, #5b4ed8)', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', 
-            boxShadow: '0 4px 12px rgba(124,109,245,0.3)',
-            border: '1px solid rgba(255,255,255,0.1)'
+            fontSize: '16px', 
+            fontWeight: 700, 
+            color: '#fff', 
+            letterSpacing: '-0.5px',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontFamily: "'Outfit', sans-serif"
           }}>
-            <span style={{ fontSize: '18px' }}>⚡</span>
+            US
           </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '0.01em', fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
-              US-IDE <span style={{ color: '#7c6df5' }}>Intelligence</span>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>
+              US-IDE <span style={{ color: 'var(--accent-color)' }}>Intelligence</span>
             </div>
-            <div style={{ fontSize: '10px', color: '#555570', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              PROPRIETARY CORE · v1.0
+            <div style={{ fontSize: '10px', color: '#555570', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '2px' }}>
+              PROPRIETARY CORE · V1.0
             </div>
           </div>
         </div>
-        <button onClick={clearChat} style={{ fontSize: '11px', color: '#8888a0', background: 'rgba(255,255,255,0.03)', border: '1px solid #1f1f2e', cursor: 'pointer', padding: '5px 12px', borderRadius: '8px', fontWeight: 600, transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = '#3a3a4d' }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#8888a0'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = '#1f1f2e' }}
+        
+        <button 
+          onClick={clearChat} 
+          style={{ 
+            fontSize: '11px', color: '#8888a0', background: 'rgba(255,255,255,0.03)', 
+            border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', 
+            padding: '6px 14px', borderRadius: '8px', fontWeight: 700, 
+            transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: '0.05em'
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#8888a0'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
         >New Chat</button>
       </div>
 
       {/* Messages */}
-      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         {messages.map((msg, i) => (
           <div key={msg.id} style={{ display: 'flex', gap: '14px', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ 
-                width: '28px', height: '28px', borderRadius: '8px', 
-                background: msg.role === 'user' ? '#2a2a3d' : 'linear-gradient(135deg, #7c6df5, #5b4ed8)',
+                width: '32px', height: '32px', borderRadius: '10px', 
+                background: msg.role === 'user' ? 'rgba(var(--accent-color-rgb), 0.15)' : 'rgba(var(--accent-color-rgb), 0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px',
-                boxShadow: msg.role === 'assistant' ? '0 2px 6px rgba(124,109,245,0.2)' : 'none'
+                border: msg.role === 'user' ? '1px solid rgba(var(--accent-color-rgb), 0.3)' : '1px solid rgba(var(--accent-color-rgb), 0.2)',
+                overflow: 'hidden'
               }}>
-                {msg.role === 'user' ? '👤' : '🤖'}
+                {msg.role === 'user' 
+                  ? (user?.picture ? <img src={user.picture} style={{ width: '100%', height: '100%' }} /> : <span style={{ color: 'var(--accent-color)' }}>👤</span>) 
+                  : <div style={{ 
+                      fontSize: '12px', 
+                      fontWeight: 800, 
+                      color: '#fff', 
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      fontFamily: "'Outfit', sans-serif"
+                    }}>US</div>}
               </div>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: msg.role === 'user' ? '#e0e0f0' : '#7c6df5' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: msg.role === 'user' ? '#fff' : 'var(--accent-color)' }}>
                 {msg.role === 'user' ? 'You' : 'US-IDE AI'}
               </span>
             </div>
             
-            <div style={{ paddingLeft: '42px' }}>
-              {msg.role === 'user'
-                ? <p style={{ margin: 0, fontSize: '14px', color: '#fff', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-                : <MessageContent text={msg.content} role={msg.role} attachments={msg.attachments} />
-              }
+            <div style={{ paddingLeft: '44px' }}>
+              <MessageContent 
+                text={msg.content} 
+                role={msg.role} 
+                attachments={msg.attachments} 
+                disableInsert={!currentFile}
+                onAction={handleActionRequest}
+                theme={settings.theme}
+              />
+
+              {msg.showOpenFolderBtn && (
+                <button
+                  onClick={handleOpenFolderRequest}
+                  style={{
+                    marginTop: '12px',
+                    background: '#7c6df5',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <FolderOpen size={14} /> Open Folder
+                </button>
+              )}
 
               {/* Message Actions */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                 {msg.role === 'user' && (
                   <button 
                     onClick={() => handleEdit(msg)}
@@ -354,30 +655,30 @@ export default function AIChatPanel() {
                     <EditIcon />
                   </button>
                 )}
-                {msg.role === 'assistant' && !msg.error && (
+                {msg.role === 'assistant' && !msg.error && msg.id !== 'welcome' && (
                   <>
                     <button 
                       onClick={() => handleCopy(msg.id, msg.content)}
-                      style={{ background: 'none', border: 'none', color: copiedId === msg.id ? '#00e888' : '#555570', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', transition: 'color 0.2s' }}
+                      style={{ background: 'none', border: 'none', color: copiedId === msg.id ? '#00e888' : '#444466', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', transition: 'color 0.2s' }}
                       onMouseEnter={e => !copiedId && (e.currentTarget.style.color = '#8888a0')}
-                      onMouseLeave={e => !copiedId && (e.currentTarget.style.color = '#555570')}
+                      onMouseLeave={e => !copiedId && (e.currentTarget.style.color = '#444466')}
                       title="Copy response"
                     >
                       {copiedId === msg.id ? <CheckIcon /> : <CopyIcon />}
                     </button>
                     <button 
                       onClick={() => handleReaction(msg.id, 'like')}
-                      style={{ background: 'none', border: 'none', color: reactions[msg.id] === 'like' ? '#7c6df5' : '#555570', cursor: 'pointer', transition: 'all 0.2s' }}
+                      style={{ background: 'none', border: 'none', color: reactions[msg.id] === 'like' ? '#7c6df5' : '#444466', cursor: 'pointer', transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.color = '#7c6df5'}
-                      onMouseLeave={e => reactions[msg.id] !== 'like' && (e.currentTarget.style.color = '#555570')}
+                      onMouseLeave={e => reactions[msg.id] !== 'like' && (e.currentTarget.style.color = '#444466')}
                     >
                       <LikeIcon active={reactions[msg.id] === 'like'} />
                     </button>
                     <button 
                       onClick={() => handleReaction(msg.id, 'dislike')}
-                      style={{ background: 'none', border: 'none', color: reactions[msg.id] === 'dislike' ? '#ff4d6d' : '#555570', cursor: 'pointer', transition: 'all 0.2s' }}
+                      style={{ background: 'none', border: 'none', color: reactions[msg.id] === 'dislike' ? '#ff4d6d' : '#444466', cursor: 'pointer', transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.color = '#ff4d6d'}
-                      onMouseLeave={e => reactions[msg.id] !== 'dislike' && (e.currentTarget.style.color = '#555570')}
+                      onMouseLeave={e => reactions[msg.id] !== 'dislike' && (e.currentTarget.style.color = '#444466')}
                     >
                       <DislikeIcon active={reactions[msg.id] === 'dislike'} />
                     </button>
@@ -387,23 +688,34 @@ export default function AIChatPanel() {
             </div>
           </div>
         ))}
-
         {loading && (
-          <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '14px', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ 
-                width: '24px', height: '24px', borderRadius: '6px', 
-                background: 'linear-gradient(135deg, #7c6df5, #5b4ed8)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px'
-              }}>AI</div>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#8888a0' }}>Thinking...</span>
-            </div>
-            <div style={{ paddingLeft: '36px' }}>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {[0, 0.2, 0.4].map((d, i) => (
-                  <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#7c6df5', animation: `bounce 1s ${d}s infinite` }} />
-                ))}
+                width: '28px', height: '28px', borderRadius: '8px', 
+                background: 'rgba(var(--accent-color-rgb), 0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1px solid rgba(var(--accent-color-rgb), 0.2)'
+              }}>
+                <div style={{ 
+                  fontSize: '11px', 
+                  fontWeight: 800, 
+                  color: '#fff', 
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontFamily: "'Outfit', sans-serif"
+                }}>US</div>
               </div>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--accent-color)' }}>US-IDE AI</span>
+            </div>
+            <div style={{ paddingLeft: '44px', display: 'flex', alignItems: 'center', gap: '10px', color: '#555570', fontSize: '13px' }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <div style={{ width: '4px', height: '4px', background: '#7c6df5', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out' }} />
+                <div style={{ width: '4px', height: '4px', background: '#7c6df5', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out 0.2s' }} />
+                <div style={{ width: '4px', height: '4px', background: '#7c6df5', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out 0.4s' }} />
+              </div>
+              <span>Thinking...</span>
             </div>
           </div>
         )}
@@ -411,7 +723,24 @@ export default function AIChatPanel() {
       </div>
 
       {/* Footer Area */}
-      <div style={{ padding: '16px', borderTop: '1px solid #1f1f2e', background: '#0d0d18' }}>
+      <div style={{ padding: '20px', background: '#0a0a0f', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        {/* Quick Actions */}
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="no-scrollbar">
+          {QUICK_ACTIONS.map(qa => (
+            <button
+              key={qa.id}
+              onClick={() => sendMessage('', qa.action)}
+              style={{
+                whiteSpace: 'nowrap', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                color: '#aaaacc', padding: '8px 16px', borderRadius: '10px', fontSize: '11px',
+                fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#7c6df5'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#aaaacc' }}
+            >{qa.label}</button>
+          ))}
+        </div>
+
         {/* Attachment Previews */}
         {attachments.length > 0 && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -439,8 +768,31 @@ export default function AIChatPanel() {
           </div>
         )}
 
-        <div style={{ position: 'relative', display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+        <div style={{ 
+          position: 'relative', 
+          background: '#16162a', 
+          border: '1px solid #2a2a3d', 
+          borderRadius: '14px',
+          padding: '4px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+        }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end' }}>
+            {/* Attachment Button */}
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              style={{ background: 'none', border: 'none', color: '#555570', cursor: 'pointer', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Attach files or images"
+            >
+              <PaperclipIcon />
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              style={{ display: 'none' }} 
+              multiple 
+            />
+
             <textarea
               ref={inputRef}
               value={input}
@@ -454,75 +806,185 @@ export default function AIChatPanel() {
               placeholder={editingId ? "Edit your message..." : "Message US-IDE AI..."}
               rows={1}
               style={{
-                width: '100%', padding: '14px 85px 14px 40px', borderRadius: '12px', fontSize: '13px',
-                background: '#16162a', border: '1px solid #2a2a3d', color: '#fff',
+                flex: 1, padding: '12px 0', fontSize: '14px',
+                background: 'transparent', border: 'none', color: '#fff',
                 resize: 'none', outline: 'none', fontFamily: 'inherit',
                 maxHeight: '200px', overflowY: 'auto', lineHeight: '1.5'
               }}
             />
             
-            {/* Attachment Button */}
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              style={{ position: 'absolute', left: '12px', bottom: '12px', background: 'none', border: 'none', color: '#555570', cursor: 'pointer', padding: '4px' }}
-              title="Attach files or images"
-            >
-              <PaperclipIcon />
-            </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              style={{ display: 'none' }} 
-              multiple 
-            />
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px' }}>
+              {/* Voice Mic Button */}
+              <button 
+                onClick={toggleListening}
+                style={{ 
+                  background: isListening ? 'rgba(255,77,109,0.15)' : 'none', 
+                  border: 'none', color: isListening ? '#ff4d6d' : '#555570', 
+                  cursor: 'pointer', padding: '8px', borderRadius: '8px',
+                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                title={isListening ? "Stop listening" : "Send voice query"}
+              >
+                <MicIcon active={isListening} pulse={isListening} />
+              </button>
 
-            {/* Voice Mic Button */}
-            <button 
-              onClick={toggleListening}
-              style={{ 
-                position: 'absolute', right: '48px', bottom: '12px', 
-                background: isListening ? 'rgba(255,77,109,0.15)' : 'none', 
-                border: 'none', color: isListening ? '#ff4d6d' : '#555570', 
-                cursor: 'pointer', padding: '4px', borderRadius: '6px',
-                transition: 'all 0.2s'
-              }}
-              title={isListening ? "Stop listening" : "Send voice query"}
-            >
-              <MicIcon active={isListening} pulse={isListening} />
-            </button>
-
-            {/* Send Button */}
-            <button
-              onClick={() => sendMessage(input, 'chat', !!editingId)}
-              disabled={(!input.trim() && attachments.length === 0) || loading}
-              style={{
-                position: 'absolute', right: '8px', bottom: '8px',
-                width: '32px', height: '32px', borderRadius: '8px',
-                background: ((!input.trim() && attachments.length === 0) || loading) ? '#1f1f2e' : '#7c6df5',
-                border: 'none', color: '#fff', cursor: ((!input.trim() && attachments.length === 0) || loading) ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
-              }}
-            >
-              <SendIcon />
-            </button>
+              {/* Send Button */}
+              <button 
+                onClick={() => sendMessage(input, 'chat', !!editingId)}
+                disabled={(!input.trim() && attachments.length === 0) || loading}
+                style={{ 
+                  background: (!input.trim() && attachments.length === 0) || loading ? 'rgba(124,109,245,0.1)' : '#7c6df5', 
+                  border: 'none', color: '#fff', cursor: 'pointer', 
+                  width: '32px', height: '32px', borderRadius: '8px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                  transition: 'all 0.2s', marginLeft: '4px',
+                  opacity: (!input.trim() && attachments.length === 0) || loading ? 0.5 : 1
+                }}
+              >
+                <SendIcon />
+              </button>
+            </div>
           </div>
         </div>
         
-        {editingId && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '8px' }}>
-            <button 
-              onClick={() => { setEditingId(null); setInput('') }}
-              style={{ fontSize: '11px', color: '#8888a0', background: 'none', border: 'none', cursor: 'pointer' }}
-            >Cancel</button>
-          </div>
-        )}
-
-        <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '10px', color: '#33334d' }}>
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#444466', 
+          textAlign: 'center', 
+          marginTop: '12px', 
+          fontWeight: 600,
+          letterSpacing: '0.02em'
+        }}>
           US-IDE AI can make mistakes. Check important info.
         </div>
       </div>
+
+      {/* Professional VS Code-style Command Palette / Confirmation Popup */}
+      {showConfirmModal.show && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2000,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none'
+        }}>
+          <div style={{
+            marginTop: '20px',
+            width: '450px',
+            background: '#1e1e2e',
+            border: '1px solid #3c3c52',
+            borderRadius: '8px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            padding: '16px',
+            pointerEvents: 'all',
+            animation: 'slideDown 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ 
+                width: '32px', height: '32px', borderRadius: '6px', 
+                background: 'rgba(124,109,245,0.1)', display: 'flex', 
+                alignItems: 'center', justifyContent: 'center' 
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c6df5" strokeWidth="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+              </div>
+              <div>
+                <h3 style={{ color: '#fff', fontSize: '14px', fontWeight: 600, margin: 0 }}>
+                  {showConfirmModal.type === 'create' ? `Create ${showConfirmModal.filename}?` : `Apply changes?`}
+                </h3>
+                <p style={{ color: '#8888a0', fontSize: '12px', margin: '2px 0 0 0' }}>
+                  {showConfirmModal.type === 'create' 
+                    ? `Create new file and apply AI-generated code.` 
+                    : `Modify the current file with the suggested code.`}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setShowConfirmModal({ show: false, code: '', type: '', filename: '' })}
+                style={{ 
+                  background: 'transparent', color: '#aaaacc', border: '1px solid #3c3c52', 
+                  padding: '6px 16px', borderRadius: '4px', fontSize: '12px', 
+                  fontWeight: 600, cursor: 'pointer', transition: 'all 0.1s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#555570'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = '#3c3c52'}
+              >Cancel</button>
+              <button 
+                onClick={confirmAction}
+                style={{ 
+                  background: '#7c6df5', color: '#fff', border: 'none', 
+                  padding: '6px 20px', borderRadius: '4px', fontSize: '12px', 
+                  fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(124,109,245,0.3)'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#8c7df6'}
+                onMouseLeave={e => e.currentTarget.style.background = '#7c6df5'}
+              >Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Java Folder Suggestion Popup */}
+      {javaFolderSuggestion && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2000,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none'
+        }}>
+          <div style={{
+            marginTop: '20px',
+            width: '450px',
+            background: '#1e1e2e',
+            border: '1px solid #3c3c52',
+            borderRadius: '8px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            padding: '16px',
+            pointerEvents: 'all',
+            animation: 'slideDown 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ 
+                width: 32, height: 32, borderRadius: 6, 
+                background: 'rgba(124,109,245,0.1)', display: 'flex', 
+                alignItems: 'center', justifyContent: 'center' 
+              }}>
+                <span style={{ fontSize: 18 }}>📁</span>
+              </div>
+              <div>
+                <h3 style={{ color: '#fff', fontSize: '14px', fontWeight: 600, margin: 0 }}>
+                  Organize Java Files?
+                </h3>
+                <p style={{ color: '#8888a0', fontSize: '12px', margin: '2px 0 0 0' }}>
+                  I recommend creating a <b>java/</b> folder to keep your project clean and avoid .class file clutter.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => handleJavaFolderDecision(false)}
+                style={{ 
+                  background: 'transparent', color: '#aaaacc', border: '1px solid #3c3c52', 
+                  padding: '6px 16px', borderRadius: '4px', fontSize: '11px', 
+                  fontWeight: 600, cursor: 'pointer'
+                }}
+              >Continue in Root (Not Recommended)</button>
+              <button 
+                onClick={() => handleJavaFolderDecision(true)}
+                style={{ 
+                  background: '#7c6df5', color: '#fff', border: 'none', 
+                  padding: '6px 20px', borderRadius: '4px', fontSize: '11px', 
+                  fontWeight: 600, cursor: 'pointer'
+                }}
+              >Create Folder (Recommended)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
     </div>
   )
 }
-
