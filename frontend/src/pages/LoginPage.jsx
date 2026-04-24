@@ -140,7 +140,7 @@ export default function LoginPage() {
             US
           </div>
           <span className="text-text-primary font-semibold text-lg tracking-tight">US-IDE</span>
-          <span className="px-2 py-0.5 text-xs rounded-full font-mono" style={{ background: 'rgba(124, 109, 245, 0.15)', color: '#9d8fff' }}>v1.0.1</span>
+          <span className="px-2 py-0.5 text-xs rounded-full font-mono" style={{ background: 'rgba(124, 109, 245, 0.15)', color: '#9d8fff' }}>v1.1.0</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-text-muted text-sm">Built for developers</span>

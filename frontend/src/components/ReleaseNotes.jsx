@@ -2,12 +2,12 @@ import React from 'react';
 
 const RELEASES = [
   {
-    version: '1.0.1',
+    version: '1.1.0',
     status: 'latest',
     date: '2026-04-23',
     endOfSupport: '2028-10',
-    schedule: 'v1.0.1 Notes',
-    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.0.1/US-IDE-Setup.exe'
+    schedule: 'v1.1.0 Notes',
+    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.1.0/US-IDE-Setup.exe'
   },
   {
     version: '1.0.0',

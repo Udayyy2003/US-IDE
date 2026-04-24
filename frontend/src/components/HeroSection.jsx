@@ -74,7 +74,7 @@ export default function HeroSection({ downloadLink }) {
             e.currentTarget.style.boxShadow = '0 10px 20px rgba(124,109,245,0.2)';
           }}
         >
-          <span>⬇</span> Download for Windows (v1.0.1)
+          <span>⬇</span> Download for Windows (v1.1.0)
         </button>
 
         <button
