@@ -7,7 +7,7 @@ const RELEASES = [
     date: '2026-04-23',
     endOfSupport: '2028-10',
     schedule: 'v1.0.1 Notes',
-    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.0.0/US-IDE-Setup.exe'
+    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.0.1/US-IDE-Setup.exe'
   },
   {
     version: '1.0.0',
