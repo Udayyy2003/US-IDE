@@ -271,7 +271,7 @@ const WelcomeDashboard = ({ setShowLoginModal }) => {
                 onClick={() => {
                   console.log("AI Click - Current user in state:", user);
                   // Force a check against localStorage to be absolutely sure
-                  const hasUser = !!localStorage.getItem('us_ide_user');
+                  const hasUser = !!localStorage.getItem('uside_user');
                   
                   if (!hasUser) {
                     console.log("No user found, showing login modal");

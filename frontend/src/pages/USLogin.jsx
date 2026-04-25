@@ -27,7 +27,7 @@ const USLogin = ({ onLoginSuccess }) => {
         try {
           setIsLoggingIn(true);
           // Send code to backend
-          const res = await fetch("http://localhost:5000/auth/google", {
+          const res = await fetch("https://us-ide-backend.onrender.com/auth/google", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 

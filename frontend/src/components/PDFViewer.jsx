@@ -14,6 +14,9 @@ const PDFViewer = ({ path, title }) => {
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
 
+  // Use base path for production assets
+  const pdfPath = path.startsWith('./') ? `${import.meta.env.BASE_URL}${path.slice(2)}` : path;
+
   function onDocumentLoadSuccess({ numPages }) {
     setNumPages(numPages);
   }
@@ -86,10 +89,10 @@ const PDFViewer = ({ path, title }) => {
       }}>
         <div style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
           <Document
-            file={path}
+            file={pdfPath}
             onLoadSuccess={onDocumentLoadSuccess}
             loading={<div style={{ color: '#aaaacc' }}>Loading PDF...</div>}
-            error={<div style={{ color: '#ff4d6d' }}>Failed to load PDF. Please ensure "user-guide.pdf" exists in the public folder.</div>}
+            error={<div style={{ color: '#ff4d6d' }}>Failed to load PDF. Please ensure "user-guidence.pdf" exists in the public folder.</div>}
           >
             <Page 
               pageNumber={pageNumber} 

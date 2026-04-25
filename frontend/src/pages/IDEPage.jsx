@@ -239,7 +239,7 @@ export default function IDEPage() {
   const handleWebLogin = useCallback(() => {
     try {
       // Points to our production Vercel URL
-      const loginUrl = "https://us-ide.vercel.app/us-login";
+      const loginUrl = "https://us-ide.vercel.app";
       console.log("[Auth] Attempting production web login:", loginUrl);
       
       const hasApi = typeof window !== 'undefined' && window.api;
@@ -822,7 +822,15 @@ export default function IDEPage() {
                 </div>
               ) : (
                 <button
-                  onClick={handleWebLogin}
+                  onClick={() => {
+                    console.log("AI Click - Current user in state:", user);
+                    // Force a check against localStorage to be absolutely sure
+                    const hasUser = !!localStorage.getItem('uside_user');
+                    
+                    if (!hasUser) {
+                      handleWebLogin();
+                    }
+                  }}
                   style={{
                     width: 320,
                     height: 50,
