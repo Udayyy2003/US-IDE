@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 
 const USLogin = ({ onLoginSuccess }) => {
+  // 2. Fallback for manual login or deep link failure
+  const handleManualLogin = () => {
+    window.open("https://us-ide.vercel.app/login", "_blank");
+  };
+
   const { handleGoogleLogin: syncAuth } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState(null);

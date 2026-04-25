@@ -239,7 +239,7 @@ export default function IDEPage() {
   const handleWebLogin = useCallback(() => {
     try {
       // Points to our production Vercel URL
-      const loginUrl = "https://us-ide.vercel.app";
+      const loginUrl = "https://us-ide.vercel.app/login";
       console.log("[Auth] Attempting production web login:", loginUrl);
       
       const hasApi = typeof window !== 'undefined' && window.api;
