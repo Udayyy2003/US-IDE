@@ -48,21 +48,30 @@ const USLogin = ({ onLoginSuccess }) => {
           const data = await res.json();
 
           if (data.user && data.token) {
-            // Success! Redirect to deep link
-            const deepLink = `uside://auth?token=${data.token}&user=${encodeURIComponent(JSON.stringify(data.user))}`;
-            window.location.href = deepLink;
+            // Check if we are in Electron or Web
+            const isElectron = !!window.api;
             
-            // Fallback: show success message if deep link doesn't trigger
-            setTimeout(() => {
-              setIsLoggingIn(false);
-              document.body.innerHTML = `
-                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;color:#fff;font-family:sans-serif;">
-                  <h2 style="color:#7c6df5;">Login Successful!</h2>
-                  <p>You can close this window and return to US IDE.</p>
-                  <button onclick="window.close()" style="padding:10px 20px;background:#7c6df5;border:none;border-radius:5px;color:#fff;cursor:pointer;">Close Window</button>
-                </div>
-              `;
-            }, 2000);
+            if (isElectron) {
+              // Direct login for Electron
+              syncAuth(data.user, data.token);
+              if (onLoginSuccess) onLoginSuccess();
+            } else {
+              // Deep link for Web
+              const deepLink = `uside://auth?token=${data.token}&user=${encodeURIComponent(JSON.stringify(data.user))}`;
+              window.location.href = deepLink;
+              
+              // Fallback: show success message if deep link doesn't trigger
+              setTimeout(() => {
+                setIsLoggingIn(false);
+                document.body.innerHTML = `
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0a0f;color:#fff;font-family:sans-serif;">
+                    <h2 style="color:#7c6df5;">Login Successful!</h2>
+                    <p>You can close this window and return to US IDE.</p>
+                    <button onclick="window.close()" style="padding:10px 20px;background:#7c6df5;border:none;border-radius:5px;color:#fff;cursor:pointer;">Close Window</button>
+                  </div>
+                `;
+              }, 2000);
+            }
           }
         } catch (err) {
           setError(err.message);
