@@ -259,7 +259,7 @@ const WelcomeDashboard = ({ setShowLoginModal }) => {
                 onClick={() => openTab({
                   type: 'pdf',
                   name: 'User Guide',
-                  path: '/user-guide.pdf',
+                  path: './user-guidence.pdf',
                   content: '',
                   language: 'pdf'
                 })}

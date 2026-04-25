@@ -33,6 +33,8 @@
     "files": [
       "electron/**/*",
       "frontend/dist/**/*",
+      "backend/**/*",
+      "server.js",
       "package.json"
     ],
     "win": {

@@ -10,7 +10,12 @@ app.commandLine.appendSwitch('enable-speech-input');
 app.commandLine.appendSwitch('enable-media-stream');
 app.commandLine.appendSwitch('disable-features', 'FedCm');
 
-const pty = require('node-pty');
+let pty;
+try {
+  pty = require('node-pty');
+} catch (e) {
+  console.error('[US-IDE] Failed to load node-pty:', e.message);
+}
 const path = require('path');
 
 if (process.defaultApp) {
@@ -105,60 +110,81 @@ if (!gotTheLock) {
 }
 
 function createWindow() {
+  const preloadPath = path.join(__dirname, 'preload.js');
+  console.log('[US-IDE] Preload path:', preloadPath);
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      // Fix: CSP settings for Monaco and Fonts
-      webSecurity: true,
+      preload: preloadPath,
+      webSecurity: false, // Temporarily disable for debugging
     },
     frame: false,
     title: 'US-IDE',
     icon: path.join(__dirname, 'icon.ico'),
-    show: false, // show after ready-to-show
+    backgroundColor: '#0a0a0f', // Set background color to match app
+    show: true, // Show immediately
   });
 
-  // CSP: Allow fonts from gstatic.com and cdnjs/jsdelivr
+  // Temporarily disable CSP override to rule it out
+  /*
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:5000 http://localhost:5173 https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://accounts.google.com; " +
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net; " +
-          "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " +
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://accounts.google.com; " +
-          "worker-src 'self' blob:; " +
-          "img-src 'self' data: blob: https://*; " +
-          "connect-src 'self' http://localhost:5000 http://localhost:5173 https://api.groq.com https://cdn.jsdelivr.net https://accounts.google.com;"
-        ]
-      }
-    });
+    ...
   });
-
-  mainWindow.setMenuBarVisibility(false);
-  mainWindow.setAutoHideMenuBar(true);
-
-  // Show when ready to avoid white flash
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
+  */
 
   const devUrl = process.env.ELECTRON_START_URL || 'http://localhost:5173';
-  const prodIndex = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
+  
+  // Try multiple path strategies
+  const appPath = app.getAppPath();
+  const path1 = path.join(appPath, 'frontend', 'dist', 'index.html');
+  const path2 = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
+  
+  let finalPath = '';
+  if (fs.existsSync(path1)) {
+    finalPath = path1;
+  } else if (fs.existsSync(path2)) {
+    finalPath = path2;
+  }
+
+  if (!isDev && !finalPath) {
+    const debugInfo = `
+App Path: ${appPath}
+__dirname: ${__dirname}
+Checked Path 1: ${path1}
+Checked Path 2: ${path2}
+Contents of App Path: ${fs.readdirSync(appPath).join(', ')}
+    `;
+    dialog.showErrorBox('Critical Error: index.html not found', `Could not find the frontend files. The application will not load.\n\nDebug Info:\n${debugInfo}`);
+    app.quit();
+    return;
+  }
 
   if (isDev) {
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(prodIndex);
+    console.log('[US-IDE] Loading file:', finalPath);
+    mainWindow.loadFile(finalPath).catch(err => {
+      dialog.showErrorBox('Load Error', `Failed to load index.html: ${err.message}\nPath: ${finalPath}`);
+    });
+    // Keep DevTools open for now
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
-    console.error('[US-IDE] did-fail-load', code, desc, url);
+    const msg = `Failed to load: ${url}\nError Code: ${code}\nDescription: ${desc}`;
+    console.error('[US-IDE] did-fail-load', msg);
+    if (!isDev) {
+      dialog.showErrorBox('Load Failure', msg);
+    }
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[US-IDE] Content loaded successfully');
   });
 
   mainWindow.webContents.on('render-process-gone', (_e, details) => {

@@ -89,7 +89,7 @@ export default function IDEPage() {
   const handleGoogleLogin = async (code) => {
     try {
       setIsLoggingIn(true);
-      const res = await fetch("http://localhost:5000/auth/google", {
+      const res = await fetch("https://us-ide-backend.onrender.com/auth/google", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -113,7 +113,7 @@ export default function IDEPage() {
     } catch (err) {
       console.error("Backend Auth Error:", err);
       const errorMsg = err.message.includes("Failed to fetch") 
-        ? "Server connection failed. Ensure the backend is running on port 5000." 
+        ? "Server connection failed. Ensure the backend is running on Render." 
         : err.message;
       setLoginError(errorMsg);
     } finally {
@@ -238,9 +238,9 @@ export default function IDEPage() {
   // Handle Web Login (Browser Redirect)
   const handleWebLogin = useCallback(() => {
     try {
-      // Points to our local dev server route (Clean URL supported by BrowserRouter)
-      const loginUrl = "http://localhost:5173/us-login";
-      console.log("[Auth] Attempting local web login:", loginUrl);
+      // Points to our production Vercel URL
+      const loginUrl = "https://us-ide.vercel.app/us-login";
+      console.log("[Auth] Attempting production web login:", loginUrl);
       
       const hasApi = typeof window !== 'undefined' && window.api;
       const hasOpenExternal = hasApi && typeof window.api.openExternal === 'function';
