@@ -80,7 +80,12 @@ def google_auth():
         token_res_data = token_res.json()
         
         if "error" in token_res_data:
-            return jsonify({"error": "Google token exchange failed", "details": token_res_data}), 400
+            print(f"[Auth Error] Google token exchange failed: {token_res_data}")
+            return jsonify({
+                "error": "Google token exchange failed", 
+                "details": token_res_data.get("error_description", token_res_data.get("error")),
+                "raw": token_res_data
+            }), 400
             
         access_token = token_res_data.get("access_token")
         
