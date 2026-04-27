@@ -246,7 +246,7 @@ export default function AIChatPanel() {
   }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initializing, setInitializing] = useState(true)
+  const [initializing, setInitializing] = useState(false)
   const [reactions, setReactions] = useState({}) // { msgId: 'like' | 'dislike' }
   const [copiedId, setCopiedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
@@ -260,11 +260,7 @@ export default function AIChatPanel() {
   const fileInputRef = useRef(null)
 
   // ─── Initializing State ───
-  useEffect(() => {
-    const timer = setTimeout(() => setInitializing(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
-
+  
   // ─── Speech Recognition Setup ──────────────────────────────────────────
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
   const recognition = SpeechRecognition ? new SpeechRecognition() : null

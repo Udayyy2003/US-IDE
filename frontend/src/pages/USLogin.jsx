@@ -1,12 +1,23 @@
 import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const USLogin = ({ onLoginSuccess }) => {
+  console.log("[USLogin] Rendering USLogin component");
+  
   // 2. Fallback for manual login or deep link failure
   const handleManualLogin = () => {
-    window.open("https://us-ide.vercel.app/login", "_blank");
+    window.open("http://localhost:5173/us-login", "_blank");
   };
 
-  const { handleGoogleLogin: syncAuth } = useAuth();
+  let auth = null;
+  try {
+    auth = useAuth();
+  } catch (e) {
+    console.warn("[USLogin] AuthContext not found, running in standalone mode");
+  }
+  
+  console.log("[USLogin] Auth context:", auth);
+  const { handleGoogleLogin: syncAuth } = auth || {};
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,8 +42,8 @@ const USLogin = ({ onLoginSuccess }) => {
 
         try {
           setIsLoggingIn(true);
-          // Send code to backend
-          const res = await fetch("https://us-ide-backend.onrender.com/auth/google", {
+          // Use local backend for development testing
+          const res = await fetch("http://localhost:5000/auth/google", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 

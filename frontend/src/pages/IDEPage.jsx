@@ -89,7 +89,7 @@ export default function IDEPage() {
   const handleGoogleLogin = async (code) => {
     try {
       setIsLoggingIn(true);
-      const res = await fetch("https://us-ide-backend.onrender.com/auth/google", {
+      const res = await fetch("http://localhost:5000/auth/google", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -238,9 +238,9 @@ export default function IDEPage() {
   // Handle Web Login (Browser Redirect)
   const handleWebLogin = useCallback(() => {
     try {
-      // Points to our production Vercel URL
-      const loginUrl = "https://us-ide.vercel.app/login";
-      console.log("[Auth] Attempting production web login:", loginUrl);
+      // Use localhost for local development testing
+      const loginUrl = "http://localhost:5173/us-login";
+      console.log("[Auth] Attempting local web login:", loginUrl);
       
       const hasApi = typeof window !== 'undefined' && window.api;
       const hasOpenExternal = hasApi && typeof window.api.openExternal === 'function';
