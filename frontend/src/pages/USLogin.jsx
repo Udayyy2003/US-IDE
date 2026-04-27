@@ -45,7 +45,7 @@ const USLogin = ({ onLoginSuccess }) => {
           setIsLoggingIn(true);
           setError(null);
           // Use production backend if available
-          const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
+          const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide.onrender.com";
           console.log(`[Auth] Attempting login via: ${apiUrl}/auth/google`);
           
           const res = await fetch(`${apiUrl}/auth/google`, {

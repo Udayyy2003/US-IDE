@@ -90,7 +90,7 @@ export default function IDEPage() {
     try {
       setIsLoggingIn(true);
       setLoginError(null);
-      const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
+      const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide.onrender.com";
       console.log(`[Auth] Attempting Google login via: ${apiUrl}`);
       
       const res = await fetch(`${apiUrl}/auth/google`, {
