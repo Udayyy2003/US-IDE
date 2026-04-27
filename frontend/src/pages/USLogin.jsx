@@ -62,7 +62,8 @@ const USLogin = ({ onLoginSuccess }) => {
 
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({ error: "Backend authentication failed" }));
-            throw new Error(errorData.error || errorData.details || "Backend authentication failed");
+            const detailMsg = errorData.details || (errorData.raw ? JSON.stringify(errorData.raw) : "");
+            throw new Error(`${errorData.error}${detailMsg ? ": " + detailMsg : ""}`);
           }
           const data = await res.json();
 

@@ -44,6 +44,11 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "544220144669-dm29cjddvbb0e3tgh
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 JWT_SECRET = os.getenv("JWT_SECRET", "uside-super-secret-key")
 
+if not GOOGLE_CLIENT_SECRET:
+    print("[US-IDE] WARNING: GOOGLE_CLIENT_SECRET not found in environment variables")
+else:
+    print(f"[US-IDE] GOOGLE_CLIENT_SECRET loaded: {GOOGLE_CLIENT_SECRET[:4]}...{GOOGLE_CLIENT_SECRET[-4:]}")
+
 @app.route("/")
 def index():
     return jsonify({
