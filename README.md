@@ -1,0 +1,254 @@
+# US-IDE — AI-Powered Cloud IDE
+
+A browser-based AI-powered IDE inspired by Cursor IDE and VS Code, built for university final-year project using real industry standards.
+
+## ✨ Features
+
+- **🔐 Google OAuth 2.0** — Secure login with verified Google accounts
+- **🐳 Docker Sandbox Execution** — Secure code execution in isolated containers
+- **🤖 AI Assistant** — Powered by Groq API (LLaMA 3 70B) for code explanation, fixing, optimization
+- **📝 Monaco Editor** — Same editor as VS Code with syntax highlighting
+- **🌐 Multi-Language** — Python, C, C++, Java support
+- **📁 Project Management** — Create, manage, and switch between projects
+- **💬 AI Chat** — Context-aware chat with your current code
+
+## 🏗️ Architecture
+
+```
+Frontend (React + Vite)     ──→  Vercel
+Backend (Flask + Python)    ──→  Render
+Code Execution              ──→  Docker containers
+Authentication              ──→  Google OAuth 2.0
+AI                          ──→  Groq API (LLaMA 3)
+```
+
+## 📁 Project Structure
+
+```
+us-ide/
+├── frontend/                 # React + Vite frontend
+│   ├── src/
+│   │   ├── components/       # UI components
+│   │   │   ├── CodeEditor.jsx      # Monaco editor wrapper
+│   │   │   ├── FileExplorer.jsx    # Left sidebar file tree
+│   │   │   ├── AIChatPanel.jsx     # Right sidebar AI chat
+│   │   │   ├── Terminal.jsx        # Bottom terminal output
+│   │   │   ├── TopBar.jsx          # Navigation + actions
+│   │   │   ├── NewProjectModal.jsx # Create project wizard
+│   │   │   └── ProjectSelector.jsx # Open existing project
+│   │   ├── pages/
+│   │   │   ├── LoginPage.jsx       # Landing / login page
+│   │   │   └── IDEPage.jsx         # Main IDE layout
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.jsx     # User auth state
+│   │   │   └── IDEContext.jsx      # IDE state (project, file, terminal)
+│   │   └── utils/
+│   │       └── api.js              # Axios API client
+│   ├── .env.example
+│   └── vercel.json
+├── backend/
+│   ├── app.py                # Flask API server
+│   ├── requirements.txt
+│   ├── Dockerfile            # Backend container
+│   ├── executor.Dockerfile   # Code execution image
+│   └── .env.example
+├── docker-compose.yml        # Local development
+└── README.md
+```
+
+## 🚀 Local Development Setup
+
+### Prerequisites
+
+- Node.js 18+
+- Python 3.11+
+- Docker
+- Google Cloud account
+- Groq API account
+
+---
+
+### Step 1: Clone and Setup
+
+```bash
+git clone https://github.com/yourusername/us-ide.git
+cd us-ide
+```
+
+### Step 2: Google OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable **Google Identity API**
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+5. Application type: **Web application**
+6. Add authorized JavaScript origins:
+   - `http://localhost:5173` (development)
+   - `https://your-domain.vercel.app` (production)
+7. Add authorized redirect URIs:
+   - `http://localhost:5173`
+   - `https://your-domain.vercel.app`
+8. Copy the **Client ID** and **Client Secret**
+
+### Step 3: Get Groq API Key
+
+1. Go to [console.groq.com](https://console.groq.com)
+2. Create account and generate API key
+3. Copy the API key
+
+### Step 4: Backend Setup
+
+```bash
+cd backend
+
+# Copy env file
+cp .env.example .env
+
+# Edit .env with your values:
+# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=your-secret
+# GROQ_API_KEY=gsk_...
+# JWT_SECRET=any-random-string
+# SECRET_KEY=any-random-string
+# FRONTEND_URL=http://localhost:5173
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Step 5: Build Docker Executor Image
+
+```bash
+cd backend
+docker build -f executor.Dockerfile -t us-ide-executor .
+```
+
+### Step 6: Start Backend
+
+```bash
+# Make sure virtual environment is active
+cd backend
+python app.py
+```
+
+Backend will run at `http://localhost:5000`
+
+### Step 7: Frontend Setup
+
+```bash
+cd frontend
+
+# Copy env file
+cp .env.example .env
+
+# Edit .env:
+# VITE_API_URL=           (empty = use Vite proxy)
+# VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+Frontend will run at `http://localhost:5173`
+
+---
+
+## 🌐 Production Deployment
+
+### Backend → Render
+
+1. Push your code to GitHub
+2. Go to [render.com](https://render.com) and create account
+3. New → **Web Service**
+4. Connect your GitHub repo
+5. Settings:
+   - **Root Directory**: `backend`
+   - **Runtime**: Python 3
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:$PORT`
+6. Add Environment Variables (same as `.env`):
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GROQ_API_KEY`
+   - `JWT_SECRET`
+   - `SECRET_KEY`
+   - `FRONTEND_URL` = your Vercel URL
+7. Enable **Docker** support for code execution (Render Pro plan)
+
+> **Note on Docker**: Render's free tier doesn't support Docker-in-Docker. For Docker execution, use a VPS (DigitalOcean, AWS EC2, etc.) or Render Pro.
+
+### Frontend → Vercel
+
+1. Go to [vercel.com](https://vercel.com) and create account
+2. Import your GitHub repo
+3. **Framework**: Vite
+4. **Root Directory**: `frontend`
+5. Add Environment Variables:
+   - `VITE_API_URL` = your Render backend URL (e.g., `https://us-ide-backend.onrender.com`)
+   - `VITE_GOOGLE_CLIENT_ID` = your Google Client ID
+6. Deploy!
+
+### Custom Domain (QZZ.io)
+
+1. In Vercel: Go to your project → **Settings** → **Domains**
+2. Add `qzz.io` and `www.qzz.io`
+3. In your domain registrar (where you bought QZZ.io):
+   - Add CNAME record: `www` → `cname.vercel-dns.com`
+   - Add A record: `@` → `76.76.21.21`
+4. SSL is automatic via Vercel
+
+---
+
+## 🔒 Security Features
+
+- **Path traversal prevention**: All file paths sanitized with `re.sub`
+- **Docker sandbox**: Code runs in isolated containers with:
+  - Memory limit: 128MB
+  - CPU limit: 50%
+  - Network disabled
+  - Read-only volume mount
+  - Execution timeout: 30 seconds
+- **JWT authentication**: All API routes protected
+- **Google OAuth**: Only verified emails allowed
+- **CORS**: Restricted to frontend domain
+
+## 🛠️ API Reference
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/login/google` | No | Google OAuth login |
+| GET | `/api/projects` | Yes | List user projects |
+| POST | `/api/create-project` | Yes | Create new project |
+| POST | `/api/project-files` | Yes | List project files |
+| POST | `/api/create-file` | Yes | Create a file |
+| POST | `/api/save-file` | Yes | Save file content |
+| POST | `/api/load-file` | Yes | Load file content |
+| POST | `/api/run-code` | Yes | Execute code in Docker |
+| POST | `/api/ai-chat` | Yes | AI assistant |
+| GET | `/api/health` | No | Health check |
+
+## 🎨 Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18, Vite, TailwindCSS |
+| Editor | Monaco Editor (@monaco-editor/react) |
+| HTTP Client | Axios |
+| Routing | React Router v6 |
+| Backend | Flask 3, Python 3.11 |
+| Auth | Google OAuth 2.0, JWT |
+| AI | Groq API (LLaMA 3 70B) |
+| Execution | Docker SDK for Python |
+| Deploy Frontend | Vercel |
+| Deploy Backend | Render |
+
+## 📝 License
+
+MIT License — Built as a university final-year project.

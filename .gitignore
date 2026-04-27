@@ -1,0 +1,70 @@
+# ========================
+# Environment Variables
+# ========================
+.env
+.env.*
+frontend/.env
+backend/.env
+
+# ========================
+# Node Dependencies
+# ========================
+node_modules/
+
+# ========================
+# Python Virtual Environments
+# ========================
+venv/
+ENV/
+env/
+backend/venv/
+
+# ========================
+# Build Outputs
+# ========================
+dist/
+build/
+release/
+out/
+frontend/dist/
+backend/dist/
+
+# ========================
+# Electron Build Artifacts
+# ========================
+*.asar
+*.blockmap
+latest.yml
+
+# ========================
+# Python Cache
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
+
+# ========================
+# IDE & OS Files
+# ========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.txt
+*.pptx
+*.ppt
+*.pdf
+
+# ========================
+# User Generated Data
+# ========================
+backend/projects/
+frontend/src/components/Logo.jsx
+build/
+**/build/

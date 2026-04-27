@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Font: Inter ─────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* ─── Reset & Base ───────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #050508;
+  color: #e8e8f0;
+  font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbars ─────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a4a transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: #7c6df5; }
+
+/* ─── Hide scrollbar but keep scrollable ─────── */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ─── Animations ─────────────────────────────── */
+@keyframes spin   { to { transform: rotate(360deg); } }
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+.animate-spin    { animation: spin 0.8s linear infinite; }
+.animate-pulse   { animation: pulse 1.5s ease-in-out infinite; }
+.animate-bounce  { animation: bounce 0.8s infinite; }
+.animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+.animate-slide-up{ animation: slideUp 0.3s ease-out forwards; }
+
+/* ─── Spinner ────────────────────────────────── */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid #2a2a4a;
+  border-top-color: #7c6df5;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ─── Monaco editor container ────────────────── */
+.monaco-editor .overflow-guard { border-radius: 0; }
+
+/* ─── xterm.js overrides ─────────────────────── */
+.xterm { height: 100% !important; }
+.xterm-viewport { overflow-y: auto !important; }
+.xterm-screen  { padding: 0 4px; }
+
+/* ─── Window Controls Fix ────────────────────── */
+/* Ensure no browser tooltips show on native-like buttons */
+[style*="-webkit-app-region: drag"] * {
+  cursor: default;
+}
+[style*="-webkit-app-region: no-drag"] {
+  cursor: pointer;
+}
+
+/* ─── Tailwind CSS variable tokens ───────────── */
+:root {
+  --color-bg-primary:    #0a0a0f;
+  --color-bg-secondary:  #0d0d18;
+  --color-bg-hover:      rgba(255,255,255,0.04);
+  --color-border-subtle: #1f1f2e;
+  --color-border-default:#2a2a3d;
+  --color-text-primary:  #e8e8f0;
+  --color-text-secondary:#aaaacc;
+  --color-text-muted:    #555570;
+  --accent-color:        #7c6df5;
+  --color-accent-green:  #00e888;
+  --color-accent-cyan:   #00d4ff;
+  --color-error:         #ff4d6d;
+}
+
+/* ─── Tailwind custom utilities ──────────────── */
+@layer utilities {
+  .bg-bg-primary    { background-color: var(--color-bg-primary); }
+  .bg-bg-secondary  { background-color: var(--color-bg-secondary); }
+  .bg-bg-hover      { background-color: var(--color-bg-hover); }
+  .border-border-subtle  { border-color: var(--color-border-subtle); }
+  .border-border-default { border-color: var(--color-border-default); }
+  .text-text-primary   { color: var(--color-text-primary); }
+  .text-text-secondary { color: var(--color-text-secondary); }
+  .text-text-muted     { color: var(--color-text-muted); }
+  .text-accent-primary { color: var(--accent-color); }
+  .text-accent-green   { color: var(--color-accent-green); }
+  .bg-accent-green     { background-color: var(--color-accent-green); }
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo { 
+  filter: drop-shadow(0 0 6px var(--accent-color)); 
+}
