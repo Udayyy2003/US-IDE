@@ -43,8 +43,9 @@ const USLogin = ({ onLoginSuccess }) => {
 
         try {
           setIsLoggingIn(true);
-          // Use production backend if available, fallback to localhost for development
-          const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+          // Use production backend if available
+          const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
+          console.log(`[Auth] Fetching from: ${apiUrl}/auth/google`);
           const res = await fetch(`${apiUrl}/auth/google`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -61,6 +62,7 @@ const USLogin = ({ onLoginSuccess }) => {
           const data = await res.json();
 
           if (data.user && data.token) {
+            console.log("[Auth] Login successful, user:", data.user.email);
             // Check if we are in Electron or Web
             const isElectron = !!window.api;
             

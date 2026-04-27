@@ -24,17 +24,19 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Handle login response
-  const handleGoogleLogin = (userData) => {
+  const handleGoogleLogin = (userData, token) => {
     if (userData) {
       setUser(userData);
       setIsLoggedIn(true);
       localStorage.setItem("uside_user", JSON.stringify(userData));
+      if (token) localStorage.setItem("uside_token", token);
     }
   }
 
   // Logout function
   const logout = () => {
     localStorage.removeItem("uside_user");
+    localStorage.removeItem("uside_token");
     setUser(null);
     setIsLoggedIn(false);
   }

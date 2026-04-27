@@ -89,7 +89,7 @@ export default function IDEPage() {
   const handleGoogleLogin = async (code) => {
     try {
       setIsLoggingIn(true);
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
       const res = await fetch(`${apiUrl}/auth/google`, {
         method: "POST",
         headers: {
@@ -106,6 +106,7 @@ export default function IDEPage() {
       const data = await res.json();
       if (data.user) {
         syncAuth(data.user);
+        setIsLoggingIn(false);
         setAiPanelVisible(true);
         setShowLoginModal(false);
       } else {

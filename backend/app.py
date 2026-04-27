@@ -9,9 +9,11 @@ import json
 import re
 import uuid
 import requests
-import tempfile
+import requests
 from pathlib import Path
 from functools import wraps
+import jwt
+import datetime
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -37,6 +39,11 @@ app.secret_key = os.getenv("SECRET_KEY", "us-ide-secret-key-change-in-production
 # CORS configuration
 CORS(app)
 
+# Google Auth Constants
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "544220144669-dm29cjddvbb0e3tgh0gom57me9rha79b.apps.googleusercontent.com")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+JWT_SECRET = os.getenv("JWT_SECRET", "uside-super-secret-key")
+
 @app.route("/")
 def index():
     return jsonify({
@@ -44,6 +51,66 @@ def index():
         "message": "US-IDE Backend API is running",
         "version": "1.0.0"
     })
+
+# ─────────────────────────────────────────────
+# Routes: Authentication
+# ─────────────────────────────────────────────
+
+@app.route("/auth/google", methods=["POST"])
+def google_auth():
+    data = request.json or {}
+    code = data.get("code")
+    web_redirect_uri = data.get("web_redirect_uri", "postmessage")
+
+    if not code:
+        return jsonify({"error": "Missing authorization code"}), 400
+
+    try:
+        # 1. Exchange code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": web_redirect_uri,
+            "grant_type": "authorization_code"
+        }
+        
+        token_res = requests.post(token_url, data=token_data)
+        token_res_data = token_res.json()
+        
+        if "error" in token_res_data:
+            return jsonify({"error": "Google token exchange failed", "details": token_res_data}), 400
+            
+        access_token = token_res_data.get("access_token")
+        
+        # 2. Get user info
+        user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+        user_res = requests.get(user_info_url, headers={"Authorization": f"Bearer {access_token}"})
+        user_data = user_res.json()
+        
+        if "error" in user_data:
+            return jsonify({"error": "Failed to fetch user info", "details": user_data}), 400
+
+        # 3. Generate JWT token
+        session_token = jwt.encode({
+            "email": user_data.get("email"),
+            "name": user_data.get("name"),
+            "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }, JWT_SECRET, algorithm="HS256")
+
+        return jsonify({
+            "token": session_token,
+            "user": {
+                "name": user_data.get("name"),
+                "email": user_data.get("email"),
+                "picture": user_data.get("picture")
+            }
+        })
+
+    except Exception as e:
+        print(f"[Auth Error] {e}")
+        return jsonify({"error": "Authentication failed", "details": str(e)}), 500
 
 # Initialize Groq client
 groq_api_key = os.getenv("GROQ_API_KEY", "")
