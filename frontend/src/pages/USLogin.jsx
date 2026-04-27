@@ -43,9 +43,11 @@ const USLogin = ({ onLoginSuccess }) => {
 
         try {
           setIsLoggingIn(true);
+          setError(null);
           // Use production backend if available
           const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
-          console.log(`[Auth] Fetching from: ${apiUrl}/auth/google`);
+          console.log(`[Auth] Attempting login via: ${apiUrl}/auth/google`);
+          
           const res = await fetch(`${apiUrl}/auth/google`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -53,6 +55,9 @@ const USLogin = ({ onLoginSuccess }) => {
               code: response.code,
               web_redirect_uri: "postmessage" // Required for popup flow
             })
+          }).catch(err => {
+            console.error("[Auth] Fetch error:", err);
+            throw new Error(`Cannot reach auth server at ${apiUrl}. Please ensure the backend is deployed and running.`);
           });
 
           if (!res.ok) {

@@ -37,7 +37,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "us-ide-secret-key-change-in-production")
 
 # CORS configuration
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Google Auth Constants
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "544220144669-dm29cjddvbb0e3tgh0gom57me9rha79b.apps.googleusercontent.com")

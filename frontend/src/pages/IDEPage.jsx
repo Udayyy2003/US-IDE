@@ -89,13 +89,19 @@ export default function IDEPage() {
   const handleGoogleLogin = async (code) => {
     try {
       setIsLoggingIn(true);
+      setLoginError(null);
       const apiUrl = import.meta.env.VITE_API_URL || "https://us-ide-backend.onrender.com";
+      console.log(`[Auth] Attempting Google login via: ${apiUrl}`);
+      
       const res = await fetch(`${apiUrl}/auth/google`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ code })
+      }).catch(err => {
+        console.error("[Auth] Fetch error:", err);
+        throw new Error(`Connection failed: Cannot reach ${apiUrl}. Check if backend is live.`);
       });
 
       if (!res.ok) {
