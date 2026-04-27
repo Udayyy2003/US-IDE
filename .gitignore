@@ -57,6 +57,7 @@ logs/
 .DS_Store
 Thumbs.db
 *.txt
+!requirements.txt
 *.pptx
 *.ppt
 *.pdf
