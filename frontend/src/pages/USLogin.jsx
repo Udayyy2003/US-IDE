@@ -6,7 +6,8 @@ const USLogin = ({ onLoginSuccess }) => {
   
   // 2. Fallback for manual login or deep link failure
   const handleManualLogin = () => {
-    window.open("http://localhost:5173/us-login", "_blank");
+    const loginUrl = window.api ? "https://us-ide.vercel.app/us-login" : "/us-login";
+    window.open(loginUrl, "_blank");
   };
 
   let auth = null;
@@ -42,8 +43,9 @@ const USLogin = ({ onLoginSuccess }) => {
 
         try {
           setIsLoggingIn(true);
-          // Use local backend for development testing
-          const res = await fetch("http://localhost:5000/auth/google", {
+          // Use production backend if available, fallback to localhost for development
+          const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+          const res = await fetch(`${apiUrl}/auth/google`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 

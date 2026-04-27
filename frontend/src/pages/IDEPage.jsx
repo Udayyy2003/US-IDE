@@ -89,7 +89,8 @@ export default function IDEPage() {
   const handleGoogleLogin = async (code) => {
     try {
       setIsLoggingIn(true);
-      const res = await fetch("http://localhost:5000/auth/google", {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const res = await fetch(`${apiUrl}/auth/google`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -238,9 +239,9 @@ export default function IDEPage() {
   // Handle Web Login (Browser Redirect)
   const handleWebLogin = useCallback(() => {
     try {
-      // Use localhost for local development testing
-      const loginUrl = "http://localhost:5173/us-login";
-      console.log("[Auth] Attempting local web login:", loginUrl);
+      // Use production URL for login
+      const loginUrl = "https://us-ide.vercel.app/us-login";
+      console.log("[Auth] Attempting web login:", loginUrl);
       
       const hasApi = typeof window !== 'undefined' && window.api;
       const hasOpenExternal = hasApi && typeof window.api.openExternal === 'function';
@@ -255,7 +256,7 @@ export default function IDEPage() {
     } catch (e) {
       console.error("[Auth] handleWebLogin failed:", e);
       // Last resort fallback
-      window.open("http://localhost:5173/us-login", "_blank");
+      window.open("https://us-ide.vercel.app/us-login", "_blank");
     }
   }, []);
 
