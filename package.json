@@ -12,7 +12,7 @@
     "dev:python": "cd backend && python app.py",
     "build": "npm --prefix frontend run build",
     "electron": "electron .",
-    "electron:build": "electron-builder --win"
+    "electron:build": "npm run build && electron-builder --win"
   },
   "dependencies": {
     "axios": "^1.15.0",
@@ -32,7 +32,10 @@
     },
     "files": [
       "electron/**/*",
-      "frontend/dist/**/*",
+      {
+        "from": "frontend/dist",
+        "to": "."
+      },
       "backend/**/*",
       "server.js",
       "package.json"

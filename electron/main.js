@@ -138,41 +138,29 @@ function createWindow() {
 
   const devUrl = process.env.ELECTRON_START_URL || 'http://localhost:5173';
   
-  // Try multiple path strategies
-  const appPath = app.getAppPath();
-  const path1 = path.join(appPath, 'frontend', 'dist', 'index.html');
-  const path2 = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-  
-  let finalPath = '';
-  if (fs.existsSync(path1)) {
-    finalPath = path1;
-  } else if (fs.existsSync(path2)) {
-    finalPath = path2;
-  }
-
-  if (!isDev && !finalPath) {
-    const debugInfo = `
-App Path: ${appPath}
-__dirname: ${__dirname}
-Checked Path 1: ${path1}
-Checked Path 2: ${path2}
-Contents of App Path: ${fs.readdirSync(appPath).join(', ')}
-    `;
-    dialog.showErrorBox('Critical Error: index.html not found', `Could not find the frontend files. The application will not load.\n\nDebug Info:\n${debugInfo}`);
-    app.quit();
-    return;
-  }
+  // Use a more standard Electron path resolution for packaged apps
+  const indexPath = isDev 
+    ? null 
+    : path.resolve(__dirname, '..', 'index.html');
 
   if (isDev) {
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    console.log('[US-IDE] Loading file:', finalPath);
-    mainWindow.loadFile(finalPath).catch(err => {
-      dialog.showErrorBox('Load Error', `Failed to load index.html: ${err.message}\nPath: ${finalPath}`);
+    console.log('[US-IDE] Loading file:', indexPath);
+    mainWindow.loadFile(indexPath).catch(err => {
+      // If the above fails, try one more common fallback
+      const fallbackPath = path.join(app.getAppPath(), 'index.html');
+      mainWindow.loadFile(fallbackPath).catch(err2 => {
+        dialog.showErrorBox('Load Error', 
+          `Failed to load index.html\n\n` +
+          `Primary: ${indexPath}\n` +
+          `Fallback: ${fallbackPath}\n` +
+          `Error: ${err2.message}`
+        );
+      });
     });
-    // Keep DevTools open for now
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // DevTools removed for production
   }
 
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
