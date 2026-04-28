@@ -6,8 +6,8 @@ const RELEASES = [
     status: 'latest',
     date: '2026-04-23',
     endOfSupport: '2028-10',
-    schedule: 'v1.1.0 Notes',
-    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.1.0/US-IDE-Setup.exe'
+    schedule: 'v1.2.0 Notes',
+    downloadUrl: 'https://github.com/Udayyy2003/US-IDE/releases/download/v1.2.0/US-IDE-Setup.exe'
   },
   {
     version: '1.0.0',
